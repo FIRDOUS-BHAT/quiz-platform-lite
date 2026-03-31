@@ -75,6 +75,6 @@ python3 seed_quiz.py --file sample_quiz.json --id demo-quiz
 
 Or use the admin upload flow in the web UI for Excel-based quiz imports.
 
-## Migration Notes
+## Repository Status
 
-This repo is currently scaffolded inside the original project under `variants/quiz-platform-lite/` so it can be developed without touching the original architecture. Once you are happy with it, move this directory into its own standalone git repository.
+`quiz-platform-lite` now lives as its own standalone git repository. The old scaffolded copy under `quiz-platform/variants/quiz-platform-lite/` should be treated as deprecated and removed from the parent project.
