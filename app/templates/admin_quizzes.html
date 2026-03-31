@@ -145,12 +145,12 @@
       <tbody>
         {% for quiz in quiz_catalog.items %}
           <tr>
-            <td>
+            <td data-label="Quiz">
               <strong>{{ quiz.title }}</strong>
               <div class="meta mono">{{ quiz.quiz_id }}</div>
               <div class="meta">Created {{ quiz.created_at|datetime }}</div>
             </td>
-            <td>
+            <td data-label="Lifecycle">
               <span class="badge {% if quiz.lifecycle_status == 'published' %}active{% elif quiz.lifecycle_status == 'draft' %}pending{% elif quiz.lifecycle_status == 'archived' %}expired{% endif %}">
                 {{ quiz.lifecycle_status|title }}
               </span>
@@ -166,7 +166,7 @@
                 {% endif %}
               </div>
             </td>
-            <td>
+            <td data-label="Window">
               {% if quiz.availability_start_at or quiz.availability_end_at %}
                 <div class="meta">Opens {{ quiz.availability_start_at|datetime if quiz.availability_start_at else "Immediately" }}</div>
                 <div class="meta">Closes {{ quiz.availability_end_at|datetime if quiz.availability_end_at else "No closing time" }}</div>
@@ -174,9 +174,9 @@
                 <div class="meta">Always open when published</div>
               {% endif %}
             </td>
-            <td>{{ quiz.duration_seconds|duration }}</td>
-            <td>{{ quiz.description or "—" }}</td>
-            <td>
+            <td data-label="Duration">{{ quiz.duration_seconds|duration }}</td>
+            <td data-label="Description">{{ quiz.description or "—" }}</td>
+            <td data-label="Actions">
               <form method="post" action="/app/admin/quizzes/{{ quiz.quiz_id }}/settings" class="stack">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <input type="hidden" name="next_url" value="{{ query_url(request) }}">
@@ -286,16 +286,16 @@
       <tbody>
         {% for row in quiz_performance.items %}
           <tr>
-            <td>
+            <td data-label="Quiz">
               <strong>{{ row.title }}</strong>
               <div class="meta mono">{{ row.quiz_id }}</div>
               <div class="meta">{{ row.duration_seconds|duration }}</div>
             </td>
-            <td>{{ row.participant_count }}</td>
-            <td>{{ row.submitted_count }}</td>
-            <td>{{ row.scored_count }}</td>
-            <td>{{ "%.2f"|format(row.average_percentage) if row.average_percentage is not none else "—" }}</td>
-            <td>{{ "%.2f"|format(row.top_percentage) if row.top_percentage is not none else "—" }}</td>
+            <td data-label="Participants">{{ row.participant_count }}</td>
+            <td data-label="Submitted">{{ row.submitted_count }}</td>
+            <td data-label="Scored">{{ row.scored_count }}</td>
+            <td data-label="Average %">{{ "%.2f"|format(row.average_percentage) if row.average_percentage is not none else "—" }}</td>
+            <td data-label="Top %">{{ "%.2f"|format(row.top_percentage) if row.top_percentage is not none else "—" }}</td>
           </tr>
         {% else %}
           <tr>

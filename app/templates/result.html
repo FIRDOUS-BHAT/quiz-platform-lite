@@ -14,7 +14,7 @@
       <div class="progress-bar" style="--progress: 60%; animation: loading-pulse 2s ease infinite;"></div>
     </div>
     <div class="nav" style="margin-top: 24px;">
-      <a class="button secondary" href="/app/student">← Back to dashboard</a>
+      <a class="button secondary" href="/app/student">Back to dashboard</a>
     </div>
   </section>
   <script>
@@ -30,42 +30,42 @@
 {% else %}
   <div class="result-layout">
     <section class="result-hero card">
-      <span class="eyebrow">🏆 Result Published</span>
+      <span class="eyebrow">Result Published</span>
       <h1>{{ quiz_id }}</h1>
       <p class="hero-lead">Your attempt has been scored and written back to the portal.</p>
       <div class="detail-grid">
         <div class="detail-tile">
-          <div class="meta">📊 Score</div>
+          <div class="meta">Score</div>
           <strong>{{ result.score }} / {{ result.total }}</strong>
         </div>
         <div class="detail-tile">
-          <div class="meta">📈 Percentage</div>
+          <div class="meta">Percentage</div>
           <strong>{{ "%.2f"|format(result.percentage) }}%</strong>
         </div>
         <div class="detail-tile">
-          <div class="meta">🕐 Evaluated</div>
+          <div class="meta">Evaluated</div>
           <strong>{{ result.evaluated_at|datetime }}</strong>
         </div>
       </div>
       {% if result.percentage >= 80 %}
-        <div class="message success" style="margin-top: 20px; margin-bottom: 0;">
-          <span>🎉 Outstanding performance! You scored above 80%.</span>
+        <div class="callout success" style="margin-top: 20px;">
+          Outstanding performance. You scored above 80%.
         </div>
       {% elif result.percentage >= 50 %}
-        <div class="message info" style="margin-top: 20px; margin-bottom: 0;">
-          <span>👍 Good job! Keep practicing to improve further.</span>
+        <div class="callout info" style="margin-top: 20px;">
+          Good job. Keep practicing to improve further.
         </div>
       {% else %}
-        <div class="message error" style="margin-top: 20px; margin-bottom: 0;">
-          <span>📚 Keep studying! Review the material and try again.</span>
+        <div class="callout error" style="margin-top: 20px;">
+          Keep studying. Review the material and try again.
         </div>
       {% endif %}
       <div class="nav" style="margin-top: 20px;">
-        <a class="button secondary" href="/app/student">← Back to dashboard</a>
+        <a class="button secondary" href="/app/student">Back to dashboard</a>
       </div>
     </section>
     <aside class="card">
-      <h3>📊 Performance Snapshot</h3>
+      <h3>Performance Snapshot</h3>
       <div class="score-ring" id="score-ring" style="--score: 0; margin: 20px auto;">
         <strong id="score-value">0%</strong>
       </div>

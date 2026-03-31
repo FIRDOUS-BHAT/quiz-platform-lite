@@ -138,17 +138,17 @@
       <tbody>
         {% for record in recent_attempts.items %}
           <tr>
-            <td>
+            <td data-label="Student">
               <strong><a class="text-link" href="/app/admin/students/{{ record.user_id }}">{{ record.student_name }}</a></strong>
               <div class="meta">{{ record.student_email }}</div>
             </td>
-            <td>
+            <td data-label="Quiz">
               <strong>{{ record.quiz_title }}</strong>
               <div class="meta mono">{{ record.quiz_id }}</div>
             </td>
-            <td><span class="badge {{ record.attempt_status }}">{{ record.attempt_status|title }}</span></td>
-            <td>{{ record.started_at|datetime }}</td>
-            <td>
+            <td data-label="Status"><span class="badge {{ record.attempt_status }}">{{ record.attempt_status|title }}</span></td>
+            <td data-label="Started">{{ record.started_at|datetime }}</td>
+            <td data-label="Score">
               {% if record.score is not none and record.total is not none %}
                 {{ record.score }} / {{ record.total }}
               {% else %}

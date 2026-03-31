@@ -128,23 +128,23 @@
           </tr>
         </thead>
         <tbody>
-          {% for record in student_attempts.items %}
+        {% for record in student_attempts.items %}
             <tr>
-              <td>
+              <td data-label="Quiz">
                 <strong>{{ record.quiz_title }}</strong>
                 <div class="meta mono">{{ record.quiz_id }}</div>
               </td>
-              <td><span class="badge {{ record.attempt_status }}">{{ record.attempt_status|title }}</span></td>
-              <td>{{ record.started_at|datetime }}</td>
-              <td>{{ record.submitted_at|datetime }}</td>
-              <td>
+              <td data-label="Status"><span class="badge {{ record.attempt_status }}">{{ record.attempt_status|title }}</span></td>
+              <td data-label="Started">{{ record.started_at|datetime }}</td>
+              <td data-label="Submitted">{{ record.submitted_at|datetime }}</td>
+              <td data-label="Score">
                 {% if record.score is not none and record.total is not none %}
                   {{ record.score }} / {{ record.total }}
                 {% else %}
                   —
                 {% endif %}
               </td>
-              <td>{{ "%.2f"|format(record.percentage) if record.percentage is not none else "—" }}</td>
+              <td data-label="Percentage">{{ "%.2f"|format(record.percentage) if record.percentage is not none else "—" }}</td>
             </tr>
           {% else %}
             <tr>

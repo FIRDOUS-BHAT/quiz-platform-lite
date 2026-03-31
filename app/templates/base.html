@@ -1161,6 +1161,10 @@
       gap: 0.8rem;
     }
 
+    td[data-label]::before {
+      content: none;
+    }
+
     .pagination {
       display: flex;
       flex-wrap: wrap;
@@ -1690,6 +1694,191 @@
         right: 12px;
         bottom: 12px;
         max-width: none;
+      }
+    }
+
+    @media (max-width: 540px) {
+      .hero-grid,
+      .detail-grid,
+      .filters-grid,
+      .dashboard-grid,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero,
+      .surface,
+      .card,
+      .table-panel,
+      .quiz-card,
+      .list-card,
+      .auth-panel,
+      .auth-aside,
+      .result-hero,
+      .quiz-question {
+        padding: 1.15rem;
+        border-radius: 22px;
+      }
+
+      .topbar {
+        gap: 0.9rem;
+      }
+
+      .topbar .nav,
+      .toolbar-actions,
+      .status-row,
+      .empty-state-actions,
+      .attempt-actions .nav,
+      .quiz-card .nav,
+      .result-hero .nav {
+        width: 100%;
+      }
+
+      .topbar .nav > *,
+      .toolbar-actions > *,
+      .status-row > *,
+      .empty-state-actions > *,
+      .attempt-actions .nav > *,
+      .quiz-card .nav > *,
+      .result-hero .nav > * {
+        width: 100%;
+      }
+
+      .metrics {
+        gap: 0.8rem;
+      }
+
+      .metric {
+        padding: 1.15rem;
+      }
+
+      .metric .value {
+        font-size: 2.4rem;
+      }
+
+      .hero-lead,
+      .question-copy {
+        font-size: 1rem;
+      }
+
+      .attempt-meta {
+        gap: 0.55rem;
+      }
+
+      .attempt-chip {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .attempt-actions {
+        padding: 0.95rem;
+      }
+
+      .question-jump-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .score-ring {
+        width: 172px;
+        height: 172px;
+      }
+
+      .score-ring strong {
+        font-size: 2.35rem;
+      }
+
+      .modal-actions {
+        flex-direction: column;
+      }
+
+      .modal-actions > * {
+        width: 100%;
+      }
+
+      .table-wrap {
+        overflow: visible;
+        border: none;
+        background: transparent;
+      }
+
+      table,
+      tbody,
+      tr,
+      td {
+        display: block;
+        width: 100%;
+      }
+
+      thead {
+        display: none;
+      }
+
+      tbody {
+        display: grid;
+        gap: 0.9rem;
+      }
+
+      tbody tr {
+        border: 1px solid rgba(26, 36, 48, 0.08);
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: var(--shadow-sm);
+        padding: 0.95rem 1rem;
+      }
+
+      tbody tr:hover {
+        background: rgba(255, 255, 255, 0.86);
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 1px solid rgba(26, 36, 48, 0.08);
+      }
+
+      td {
+        border-bottom: 1px solid rgba(26, 36, 48, 0.08);
+        padding: 0.75rem 0;
+        display: grid;
+        grid-template-columns: minmax(88px, 104px) minmax(0, 1fr);
+        gap: 0.8rem;
+        align-items: start;
+      }
+
+      td:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+
+      td[data-label]::before {
+        content: attr(data-label);
+        color: var(--text-subtle);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        line-height: 1.4;
+      }
+
+      td[colspan] {
+        grid-template-columns: 1fr;
+      }
+
+      td[colspan]::before {
+        content: none;
+      }
+
+      td form.stack {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .question-jump-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      td {
+        grid-template-columns: 1fr;
+        gap: 0.4rem;
       }
     }
 
