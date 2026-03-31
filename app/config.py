@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     max_request_size_bytes: int = Field(default=32 * 1024, ge=1024)
     default_quiz_version: str = "1"
     session_cookie_name: str = "quiz_platform_session"
+    student_session_cookie_name: str = "quiz_platform_student_session"
+    admin_session_cookie_name: str = "quiz_platform_admin_session"
     session_ttl_seconds: int = Field(default=60 * 60 * 12, ge=300)
     allow_open_registration: bool = True
     bootstrap_admin_email: str = "admin@example.com"
@@ -55,7 +57,7 @@ class Settings(BaseSettings):
     @property
     def sqlalchemy_database_url(self) -> str:
         return (
-            "postgresql+psycopg2://"
+            "postgresql+asyncpg://"
             f"{quote_plus(self.postgres_user)}:{quote_plus(self.postgres_password)}"
             f"@{self.postgres_host}:{self.postgres_port}/{quote_plus(self.postgres_db)}"
         )

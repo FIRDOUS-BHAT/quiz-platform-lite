@@ -30,7 +30,7 @@ async def submit_quiz(
     submission_id = hashlib.sha256(raw_id.encode()).hexdigest()
 
     try:
-        quiz = store.get_quiz_definition(quiz_id)
+        quiz = await store.get_quiz_definition(quiz_id)
         if quiz is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -40,7 +40,7 @@ async def submit_quiz(
         answers = _validated_answers(quiz, submission)
         score = calculate_score(quiz.model_dump(mode="json"), answers)
         now = utc_now_epoch()
-        return store.save_result(
+        return await store.save_result(
             quiz_id=quiz_id,
             user_id=submission.user_id,
             score=score["score"],

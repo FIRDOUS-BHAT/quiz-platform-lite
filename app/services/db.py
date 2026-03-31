@@ -1,8 +1,10 @@
 import logging
+import ssl
 from typing import TypeAlias
 
-from sqlalchemy import Engine, create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
 from app.models import Base, User
@@ -11,46 +13,66 @@ from app.utils.time import utc_now_epoch
 
 logger = logging.getLogger(__name__)
 
-DatabaseSessionFactory: TypeAlias = sessionmaker[Session]
+DatabaseSessionFactory: TypeAlias = async_sessionmaker[AsyncSession]
 
 _DEFAULT_ADMIN_PASSWORD = "change-me-admin"
+_SCHEMA_INIT_LOCK_ID = 814205101
 
 
 def build_database_url() -> str:
     return settings.sqlalchemy_database_url
 
 
-def create_db_engine() -> Engine:
-    connect_args = {"connect_timeout": settings.postgres_connect_timeout}
-    if settings.postgres_sslmode:
-        connect_args["sslmode"] = settings.postgres_sslmode
-    if settings.postgres_sslrootcert:
-        connect_args["sslrootcert"] = settings.postgres_sslrootcert
+def _build_ssl_context(sslmode: str, sslrootcert: str | None) -> ssl.SSLContext | str | bool:
+    normalized_mode = sslmode.strip().lower()
+    if normalized_mode in {"", "disable"}:
+        return False
+    if normalized_mode in {"allow", "prefer"} and not sslrootcert:
+        return normalized_mode
 
-    return create_engine(
+    if normalized_mode == "require" and not sslrootcert:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        return context
+
+    context = ssl.create_default_context(cafile=sslrootcert or None)
+    context.check_hostname = normalized_mode == "verify-full"
+    if normalized_mode == "require":
+        context.check_hostname = False
+    return context
+
+
+def build_database_connect_args() -> dict[str, object]:
+    connect_args: dict[str, object] = {"timeout": settings.postgres_connect_timeout}
+    if settings.postgres_sslmode:
+        connect_args["ssl"] = _build_ssl_context(settings.postgres_sslmode, settings.postgres_sslrootcert)
+    return connect_args
+
+
+def create_db_engine() -> AsyncEngine:
+    return create_async_engine(
         build_database_url(),
         pool_pre_ping=True,
         pool_size=settings.postgres_pool_size,
         max_overflow=settings.postgres_max_overflow,
         pool_recycle=settings.postgres_pool_recycle,
         pool_timeout=30,
-        connect_args=connect_args,
+        connect_args=build_database_connect_args(),
     )
 
 
-def create_session_factory(engine: Engine | None = None) -> DatabaseSessionFactory:
+def create_session_factory(engine: AsyncEngine | None = None) -> DatabaseSessionFactory:
     bind = engine or create_db_engine()
-    return sessionmaker(bind=bind, autoflush=False, expire_on_commit=False)
+    return async_sessionmaker(bind=bind, autoflush=False, expire_on_commit=False)
 
 
-def create_db_pool() -> DatabaseSessionFactory:
+def create_db_pool(engine: AsyncEngine | None = None) -> DatabaseSessionFactory:
     # Compatibility wrapper for existing startup/tests while the repo moves off the old pool naming.
-    return create_session_factory()
+    return create_session_factory(engine)
 
 
-def initialize_schema(engine: Engine) -> None:
-    Base.metadata.create_all(engine)
-
+async def initialize_schema(engine: AsyncEngine) -> None:
     statements = [
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS lifecycle_status TEXT NOT NULL DEFAULT 'published';",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS availability_start_at BIGINT;",
@@ -66,12 +88,15 @@ def initialize_schema(engine: Engine) -> None:
         "CREATE INDEX IF NOT EXISTS idx_attempts_status_started_at ON attempts(status, started_at DESC);",
     ]
 
-    with engine.begin() as connection:
+    async with engine.begin() as connection:
+        # Gunicorn workers can run startup concurrently, so serialize DDL.
+        await connection.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": _SCHEMA_INIT_LOCK_ID})
+        await connection.run_sync(Base.metadata.create_all)
         for statement in statements:
-            connection.execute(text(statement))
+            await connection.execute(text(statement))
 
 
-def bootstrap_admin(session_factory: DatabaseSessionFactory) -> None:
+async def bootstrap_admin(session_factory: DatabaseSessionFactory) -> None:
     email = normalize_email(settings.bootstrap_admin_email)
     password = settings.bootstrap_admin_password
     if not email or not password:
@@ -85,13 +110,10 @@ def bootstrap_admin(session_factory: DatabaseSessionFactory) -> None:
             _DEFAULT_ADMIN_PASSWORD,
         )
 
-    with session_factory.begin() as session:
-        existing = session.query(User.user_id).filter(User.email == email).first()
-        if existing:
-            return
-
-        session.add(
-            User(
+    async with session_factory.begin() as session:
+        result = await session.execute(
+            insert(User)
+            .values(
                 user_id=f"admin-{utc_now_epoch()}",
                 email=email,
                 full_name=settings.bootstrap_admin_name,
@@ -99,5 +121,7 @@ def bootstrap_admin(session_factory: DatabaseSessionFactory) -> None:
                 role="admin",
                 created_at=utc_now_epoch(),
             )
+            .on_conflict_do_nothing(index_elements=[User.email])
         )
-        logger.info("Bootstrapped admin user %s", email)
+        if result.rowcount:
+            logger.info("Bootstrapped admin user %s", email)

@@ -22,7 +22,7 @@ async def get_result(
     store=Depends(get_store),
 ) -> ProcessingResultResponse | QuizResultResponse:
     try:
-        result = store.get_result(quiz_id, user_id)
+        result = await store.get_result(quiz_id, user_id)
         if result is None:
             return ProcessingResultResponse()
 

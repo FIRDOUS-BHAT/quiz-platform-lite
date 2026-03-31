@@ -3,11 +3,13 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 from typing import Any, Dict
+from urllib.parse import urlencode
 
-from sqlalchemy import Engine, text
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -44,6 +46,23 @@ else:
     )
 
 logger = logging.getLogger(__name__)
+
+
+def _auth_redirect_response(request: Request, exc: StarletteHTTPException) -> RedirectResponse | None:
+    if exc.status_code != status.HTTP_401_UNAUTHORIZED:
+        return None
+    if "text/html" not in request.headers.get("accept", ""):
+        return None
+
+    if request.url.path.startswith("/app/admin"):
+        target = "/app/admin/login"
+    elif request.url.path.startswith("/app/"):
+        target = "/app/login"
+    else:
+        return None
+
+    query = urlencode({"message": str(exc.detail), "message_type": "error"})
+    return RedirectResponse(url=f"{target}?{query}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -86,22 +105,22 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def check_postgres_connection(engine: Engine | None = None) -> bool:
+async def check_postgres_connection(engine: AsyncEngine | None = None) -> bool:
     """Check if Postgres is reachable."""
     try:
         managed_engine = engine or create_db_engine()
-        with managed_engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
+        async with managed_engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
         if engine is None:
-            managed_engine.dispose()
+            await managed_engine.dispose()
         return True
     except Exception as exc:
         logger.error("Postgres connection failed: %s", exc)
         return False
 
 
-def build_dependency_report(app: FastAPI) -> Dict[str, Any]:
-    postgres_ok = check_postgres_connection()
+async def build_dependency_report(app: FastAPI) -> Dict[str, Any]:
+    postgres_ok = await check_postgres_connection(getattr(app.state, "db_engine", None))
 
     return {
         "postgres": {
@@ -122,15 +141,17 @@ async def lifespan(app: FastAPI):
     logger.info("API service starting...")
     logger.info(f"Environment: {settings.environment}")
 
-    app.state.db_session_factory = create_db_pool()
-    app.state.db_engine = getattr(app.state.db_session_factory, "kw", {}).get("bind")
+    app.state.db_engine = create_db_engine()
+    app.state.db_session_factory = create_db_pool(app.state.db_engine)
     app.state.db_pool = app.state.db_session_factory
     app.state.session_cookie_name = settings.session_cookie_name
+    app.state.student_session_cookie_name = settings.student_session_cookie_name
+    app.state.admin_session_cookie_name = settings.admin_session_cookie_name
 
-    initialize_schema(app.state.db_engine)
-    bootstrap_admin(app.state.db_session_factory)
+    await initialize_schema(app.state.db_engine)
+    await bootstrap_admin(app.state.db_session_factory)
 
-    if check_postgres_connection():
+    if await check_postgres_connection(app.state.db_engine):
         logger.info("Postgres reachable at startup")
     else:
         logger.warning("Postgres not available at startup")
@@ -139,7 +160,7 @@ async def lifespan(app: FastAPI):
 
     db_engine = getattr(app.state, "db_engine", None)
     if db_engine is not None:
-        db_engine.dispose()
+        await db_engine.dispose()
 
     logger.info("API service shutting down...")
 
@@ -181,6 +202,11 @@ Instrumentator().instrument(app).expose(app)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Handle HTTP exceptions (like 404, 403, 429) with custom HTML pages if requested."""
     request_id = getattr(request.state, "request_id", "unknown")
+
+    redirect_response = _auth_redirect_response(request, exc)
+    if redirect_response is not None:
+        logger.warning("HTTP %s on %s [RequestID: %s]: %s", exc.status_code, request.url.path, request_id, exc.detail)
+        return redirect_response
 
     # Log the error (but maybe not as 'exception' for simple 404s)
     if exc.status_code >= 500:
@@ -244,7 +270,7 @@ async def health_live() -> Dict[str, Any]:
 
 @app.get("/health/ready")
 async def health_ready() -> JSONResponse:
-    report = build_dependency_report(app)
+    report = await build_dependency_report(app)
     status_code = dependency_http_status(report)
     return JSONResponse(
         status_code=status_code,
@@ -260,7 +286,7 @@ async def health_ready() -> JSONResponse:
 @app.get("/health/deep")
 async def health_deep() -> JSONResponse:
     """Deep health check that verifies infra components and template compilation."""
-    report = build_dependency_report(app)
+    report = await build_dependency_report(app)
 
     # Check if Jinja2 templates are properly configured
     # by compiling the base template layout
@@ -289,7 +315,7 @@ async def health_deep() -> JSONResponse:
 
 @app.get("/health/detailed")
 async def health_detailed() -> JSONResponse:
-    report = build_dependency_report(app)
+    report = await build_dependency_report(app)
     status_code = dependency_http_status(report)
     return JSONResponse(
         status_code=status_code,

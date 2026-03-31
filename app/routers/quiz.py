@@ -18,7 +18,7 @@ async def get_quiz(
     store=Depends(get_store),
 ) -> PublicQuizDefinition:
     try:
-        quiz = store.get_quiz_definition(quiz_id)
+        quiz = await store.get_quiz_definition(quiz_id)
         if quiz is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

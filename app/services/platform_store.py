@@ -34,14 +34,14 @@ class PlatformStore:
     def __init__(self, session_factory: DatabaseSessionFactory):
         self.session_factory = session_factory
 
-    def create_user(self, payload: RegisterRequest, role: UserRole = UserRole.STUDENT) -> UserSession:
+    async def create_user(self, payload: RegisterRequest, role: UserRole = UserRole.STUDENT) -> UserSession:
         user_id = uuid.uuid4().hex
         email = normalize_email(payload.email)
         password_hash = hash_password(payload.password)
 
-        with self.session_factory.begin() as session:
-            existing = session.execute(select(User.user_id).where(User.email == email)).first()
-            if existing:
+        async with self.session_factory.begin() as session:
+            existing = await session.execute(select(User.user_id).where(User.email == email))
+            if existing.first():
                 raise ValueError("An account with this email already exists")
 
             user = User(
@@ -60,10 +60,12 @@ class PlatformStore:
                 role=UserRole(user.role),
             )
 
-    def authenticate_user(self, email: str) -> dict[str, Any] | None:
+    async def authenticate_user(self, email: str) -> dict[str, Any] | None:
         normalized_email = normalize_email(email)
-        with self.session_factory() as session:
-            user = session.execute(select(User).where(User.email == normalized_email)).scalar_one_or_none()
+        async with self.session_factory() as session:
+            user = (
+                await session.execute(select(User).where(User.email == normalized_email))
+            ).scalar_one_or_none()
             if user is None:
                 return None
             return {
@@ -74,9 +76,9 @@ class PlatformStore:
                 "password_hash": user.password_hash,
             }
 
-    def create_session(self, user_id: str, token: str) -> int:
+    async def create_session(self, user_id: str, token: str) -> int:
         expires_at = utc_now_epoch() + settings.session_ttl_seconds
-        with self.session_factory.begin() as session:
+        async with self.session_factory.begin() as session:
             session.add(
                 SessionToken(
                     token_hash=hash_session_token(token),
@@ -87,24 +89,24 @@ class PlatformStore:
             )
         return expires_at
 
-    def delete_session(self, token: str) -> None:
+    async def delete_session(self, token: str) -> None:
         token_hash = hash_session_token(token)
-        with self.session_factory.begin() as session:
-            record = session.get(SessionToken, token_hash)
+        async with self.session_factory.begin() as session:
+            record = await session.get(SessionToken, token_hash)
             if record is not None:
-                session.delete(record)
+                await session.delete(record)
 
-    def get_user_by_session(self, token: str) -> UserSession | None:
+    async def get_user_by_session(self, token: str) -> UserSession | None:
         now = utc_now_epoch()
         token_hash = hash_session_token(token)
-        with self.session_factory.begin() as session:
-            record = session.get(SessionToken, token_hash)
+        async with self.session_factory.begin() as session:
+            record = await session.get(SessionToken, token_hash)
             if record is None:
                 return None
             if record.expires_at <= now:
-                session.delete(record)
+                await session.delete(record)
                 return None
-            user = session.get(User, record.user_id)
+            user = await session.get(User, record.user_id)
             if user is None:
                 return None
             return UserSession(
@@ -114,7 +116,7 @@ class PlatformStore:
                 role=UserRole(user.role),
             )
 
-    def create_quiz(
+    async def create_quiz(
         self,
         quiz: QuizDefinition,
         *,
@@ -122,7 +124,7 @@ class PlatformStore:
         source_filename: str | None,
         lifecycle_status: QuizLifecycleStatus = "published",
     ) -> dict[str, Any]:
-        quiz_id = self._unique_quiz_id(quiz.quiz_id or slugify(quiz.title))
+        quiz_id = await self._unique_quiz_id(quiz.quiz_id or slugify(quiz.title))
         payload = quiz.model_copy(update={"quiz_id": quiz_id, "version": settings.default_quiz_version})
         availability_start_at, availability_end_at = self._validated_quiz_window(
             payload.availability_start_at,
@@ -130,7 +132,7 @@ class PlatformStore:
         )
         created_at = utc_now_epoch()
 
-        with self.session_factory.begin() as session:
+        async with self.session_factory.begin() as session:
             entity = Quiz(
                 quiz_id=quiz_id,
                 version=settings.default_quiz_version,
@@ -158,7 +160,7 @@ class PlatformStore:
                 "raw_data": payload,
             }
 
-    def update_quiz_settings(
+    async def update_quiz_settings(
         self,
         quiz_id: str,
         *,
@@ -168,8 +170,8 @@ class PlatformStore:
     ) -> dict[str, Any]:
         validated_start, validated_end = self._validated_quiz_window(availability_start_at, availability_end_at)
 
-        with self.session_factory.begin() as session:
-            quiz = session.get(Quiz, quiz_id)
+        async with self.session_factory.begin() as session:
+            quiz = await session.get(Quiz, quiz_id)
             if quiz is None:
                 raise LookupError("Quiz not found")
 
@@ -192,7 +194,7 @@ class PlatformStore:
                 "raw_data": QuizDefinition.model_validate(raw_payload),
             }
 
-    def list_quiz_catalog_page(
+    async def list_quiz_catalog_page(
         self,
         *,
         page: int,
@@ -202,16 +204,18 @@ class PlatformStore:
         search_term = self._normalized_query(query)
         filters = self._quiz_search_filters(search_term)
 
-        with self.session_factory() as session:
-            total_items = int(session.scalar(select(func.count()).select_from(Quiz).where(*filters)) or 0)
+        async with self.session_factory() as session:
+            total_items = int(await session.scalar(select(func.count()).select_from(Quiz).where(*filters)) or 0)
             pagination = self._pagination_meta(total_items, page, page_size)
             quizzes = (
-                session.execute(
-                    select(Quiz)
-                    .where(*filters)
-                    .order_by(Quiz.created_at.desc())
-                    .limit(pagination.page_size)
-                    .offset((pagination.page - 1) * pagination.page_size)
+                (
+                    await session.execute(
+                        select(Quiz)
+                        .where(*filters)
+                        .order_by(Quiz.created_at.desc())
+                        .limit(pagination.page_size)
+                        .offset((pagination.page - 1) * pagination.page_size)
+                    )
                 )
                 .scalars()
                 .all()
@@ -220,21 +224,22 @@ class PlatformStore:
             items = [self._quiz_to_catalog_item(quiz, now=now) for quiz in quizzes]
             return AdminQuizPage(items=items, pagination=pagination)
 
-    def list_quizzes_for_admin(self) -> list[QuizCatalogItem]:
-        with self.session_factory() as session:
-            quizzes = session.execute(select(Quiz).order_by(Quiz.created_at.desc())).scalars().all()
+    async def list_quizzes_for_admin(self) -> list[QuizCatalogItem]:
+        async with self.session_factory() as session:
+            quizzes = (await session.execute(select(Quiz).order_by(Quiz.created_at.desc()))).scalars().all()
             now = utc_now_epoch()
             return [self._quiz_to_catalog_item(quiz, now=now) for quiz in quizzes]
 
-    def get_admin_summary(self) -> AdminSummaryStats:
-        with self.session_factory() as session:
-            total_quizzes = int(session.scalar(select(func.count()).select_from(Quiz)) or 0)
+    async def get_admin_summary(self) -> AdminSummaryStats:
+        async with self.session_factory() as session:
+            total_quizzes = int(await session.scalar(select(func.count()).select_from(Quiz)) or 0)
             total_students = int(
-                session.scalar(select(func.count()).select_from(User).where(User.role == UserRole.STUDENT.value)) or 0
+                await session.scalar(select(func.count()).select_from(User).where(User.role == UserRole.STUDENT.value))
+                or 0
             )
-            total_attempts = int(session.scalar(select(func.count()).select_from(Attempt)) or 0)
+            total_attempts = int(await session.scalar(select(func.count()).select_from(Attempt)) or 0)
             scored_attempts = int(
-                session.scalar(select(func.count()).select_from(Attempt).where(Attempt.status == "scored")) or 0
+                await session.scalar(select(func.count()).select_from(Attempt).where(Attempt.status == "scored")) or 0
             )
             return AdminSummaryStats(
                 total_quizzes=total_quizzes,
@@ -243,7 +248,7 @@ class PlatformStore:
                 scored_attempts=scored_attempts,
             )
 
-    def list_registered_students(
+    async def list_registered_students(
         self,
         *,
         page: int,
@@ -266,34 +271,36 @@ class PlatformStore:
             0,
         )
 
-        with self.session_factory() as session:
-            total_items = int(session.scalar(select(func.count()).select_from(User).where(*filters)) or 0)
+        async with self.session_factory() as session:
+            total_items = int(await session.scalar(select(func.count()).select_from(User).where(*filters)) or 0)
             pagination = self._pagination_meta(total_items, page, page_size)
-            rows = session.execute(
-                select(
-                    User.user_id,
-                    User.full_name,
-                    User.email,
-                    User.created_at,
-                    started_expr.label("quizzes_started"),
-                    submitted_expr.label("quizzes_submitted"),
-                    scored_expr.label("quizzes_scored"),
-                    func.avg(Result.percentage).label("average_percentage"),
-                    func.max(Result.percentage).label("best_percentage"),
+            rows = (
+                await session.execute(
+                    select(
+                        User.user_id,
+                        User.full_name,
+                        User.email,
+                        User.created_at,
+                        started_expr.label("quizzes_started"),
+                        submitted_expr.label("quizzes_submitted"),
+                        scored_expr.label("quizzes_scored"),
+                        func.avg(Result.percentage).label("average_percentage"),
+                        func.max(Result.percentage).label("best_percentage"),
+                    )
+                    .select_from(User)
+                    .outerjoin(Attempt, Attempt.user_id == User.user_id)
+                    .outerjoin(Result, and_(Result.user_id == User.user_id, Result.quiz_id == Attempt.quiz_id))
+                    .where(*filters)
+                    .group_by(User.user_id, User.full_name, User.email, User.created_at)
+                    .order_by(User.created_at.desc())
+                    .limit(pagination.page_size)
+                    .offset((pagination.page - 1) * pagination.page_size)
                 )
-                .select_from(User)
-                .outerjoin(Attempt, Attempt.user_id == User.user_id)
-                .outerjoin(Result, and_(Result.user_id == User.user_id, Result.quiz_id == Attempt.quiz_id))
-                .where(*filters)
-                .group_by(User.user_id, User.full_name, User.email, User.created_at)
-                .order_by(User.created_at.desc())
-                .limit(pagination.page_size)
-                .offset((pagination.page - 1) * pagination.page_size)
             ).all()
             items = [AdminStudentRecord.model_validate(dict(row._mapping)) for row in rows]
             return AdminStudentPage(items=items, pagination=pagination)
 
-    def get_student_admin_record(self, user_id: str) -> AdminStudentRecord | None:
+    async def get_student_admin_record(self, user_id: str) -> AdminStudentRecord | None:
         started_expr = func.count(Attempt.attempt_id)
         submitted_expr = func.coalesce(
             func.sum(case((Attempt.status.in_(("submitted", "scored")), 1), else_=0)),
@@ -304,30 +311,32 @@ class PlatformStore:
             0,
         )
 
-        with self.session_factory() as session:
-            row = session.execute(
-                select(
-                    User.user_id,
-                    User.full_name,
-                    User.email,
-                    User.created_at,
-                    started_expr.label("quizzes_started"),
-                    submitted_expr.label("quizzes_submitted"),
-                    scored_expr.label("quizzes_scored"),
-                    func.avg(Result.percentage).label("average_percentage"),
-                    func.max(Result.percentage).label("best_percentage"),
+        async with self.session_factory() as session:
+            row = (
+                await session.execute(
+                    select(
+                        User.user_id,
+                        User.full_name,
+                        User.email,
+                        User.created_at,
+                        started_expr.label("quizzes_started"),
+                        submitted_expr.label("quizzes_submitted"),
+                        scored_expr.label("quizzes_scored"),
+                        func.avg(Result.percentage).label("average_percentage"),
+                        func.max(Result.percentage).label("best_percentage"),
+                    )
+                    .select_from(User)
+                    .outerjoin(Attempt, Attempt.user_id == User.user_id)
+                    .outerjoin(Result, and_(Result.user_id == User.user_id, Result.quiz_id == Attempt.quiz_id))
+                    .where(User.role == UserRole.STUDENT.value, User.user_id == user_id)
+                    .group_by(User.user_id, User.full_name, User.email, User.created_at)
                 )
-                .select_from(User)
-                .outerjoin(Attempt, Attempt.user_id == User.user_id)
-                .outerjoin(Result, and_(Result.user_id == User.user_id, Result.quiz_id == Attempt.quiz_id))
-                .where(User.role == UserRole.STUDENT.value, User.user_id == user_id)
-                .group_by(User.user_id, User.full_name, User.email, User.created_at)
             ).first()
             if row is None:
                 return None
             return AdminStudentRecord.model_validate(dict(row._mapping))
 
-    def list_participation_records(
+    async def list_participation_records(
         self,
         *,
         page: int,
@@ -356,9 +365,9 @@ class PlatformStore:
         if user_id:
             filters.append(Attempt.user_id == user_id)
 
-        with self.session_factory() as session:
+        async with self.session_factory() as session:
             total_items = int(
-                session.scalar(
+                await session.scalar(
                     select(func.count())
                     .select_from(Attempt)
                     .join(User, User.user_id == Attempt.user_id)
@@ -368,35 +377,37 @@ class PlatformStore:
                 or 0
             )
             pagination = self._pagination_meta(total_items, page, page_size)
-            rows = session.execute(
-                select(
-                    Attempt.attempt_id,
-                    Attempt.quiz_id,
-                    Quiz.title.label("quiz_title"),
-                    Attempt.user_id,
-                    User.full_name.label("student_name"),
-                    User.email.label("student_email"),
-                    Attempt.status.label("attempt_status"),
-                    Attempt.started_at,
-                    Attempt.expires_at,
-                    Attempt.submitted_at,
-                    Result.score,
-                    Result.total,
-                    Result.percentage,
+            rows = (
+                await session.execute(
+                    select(
+                        Attempt.attempt_id,
+                        Attempt.quiz_id,
+                        Quiz.title.label("quiz_title"),
+                        Attempt.user_id,
+                        User.full_name.label("student_name"),
+                        User.email.label("student_email"),
+                        Attempt.status.label("attempt_status"),
+                        Attempt.started_at,
+                        Attempt.expires_at,
+                        Attempt.submitted_at,
+                        Result.score,
+                        Result.total,
+                        Result.percentage,
+                    )
+                    .select_from(Attempt)
+                    .join(User, User.user_id == Attempt.user_id)
+                    .join(Quiz, Quiz.quiz_id == Attempt.quiz_id)
+                    .outerjoin(Result, and_(Result.quiz_id == Attempt.quiz_id, Result.user_id == Attempt.user_id))
+                    .where(*filters)
+                    .order_by(Attempt.started_at.desc())
+                    .limit(pagination.page_size)
+                    .offset((pagination.page - 1) * pagination.page_size)
                 )
-                .select_from(Attempt)
-                .join(User, User.user_id == Attempt.user_id)
-                .join(Quiz, Quiz.quiz_id == Attempt.quiz_id)
-                .outerjoin(Result, and_(Result.quiz_id == Attempt.quiz_id, Result.user_id == Attempt.user_id))
-                .where(*filters)
-                .order_by(Attempt.started_at.desc())
-                .limit(pagination.page_size)
-                .offset((pagination.page - 1) * pagination.page_size)
             ).all()
             items = [AdminParticipationRecord.model_validate(dict(row._mapping)) for row in rows]
             return AdminParticipationPage(items=items, pagination=pagination)
 
-    def list_quiz_performance_page(
+    async def list_quiz_performance_page(
         self,
         *,
         page: int,
@@ -416,33 +427,35 @@ class PlatformStore:
             0,
         )
 
-        with self.session_factory() as session:
-            total_items = int(session.scalar(select(func.count()).select_from(Quiz).where(*filters)) or 0)
+        async with self.session_factory() as session:
+            total_items = int(await session.scalar(select(func.count()).select_from(Quiz).where(*filters)) or 0)
             pagination = self._pagination_meta(total_items, page, page_size)
-            rows = session.execute(
-                select(
-                    Quiz.quiz_id,
-                    Quiz.title,
-                    Quiz.duration_seconds,
-                    participant_expr.label("participant_count"),
-                    submitted_expr.label("submitted_count"),
-                    scored_expr.label("scored_count"),
-                    func.avg(Result.percentage).label("average_percentage"),
-                    func.max(Result.percentage).label("top_percentage"),
+            rows = (
+                await session.execute(
+                    select(
+                        Quiz.quiz_id,
+                        Quiz.title,
+                        Quiz.duration_seconds,
+                        participant_expr.label("participant_count"),
+                        submitted_expr.label("submitted_count"),
+                        scored_expr.label("scored_count"),
+                        func.avg(Result.percentage).label("average_percentage"),
+                        func.max(Result.percentage).label("top_percentage"),
+                    )
+                    .select_from(Quiz)
+                    .outerjoin(Attempt, Attempt.quiz_id == Quiz.quiz_id)
+                    .outerjoin(Result, and_(Result.quiz_id == Quiz.quiz_id, Result.user_id == Attempt.user_id))
+                    .where(*filters)
+                    .group_by(Quiz.quiz_id, Quiz.title, Quiz.duration_seconds, Quiz.created_at)
+                    .order_by(Quiz.created_at.desc())
+                    .limit(pagination.page_size)
+                    .offset((pagination.page - 1) * pagination.page_size)
                 )
-                .select_from(Quiz)
-                .outerjoin(Attempt, Attempt.quiz_id == Quiz.quiz_id)
-                .outerjoin(Result, and_(Result.quiz_id == Quiz.quiz_id, Result.user_id == Attempt.user_id))
-                .where(*filters)
-                .group_by(Quiz.quiz_id, Quiz.title, Quiz.duration_seconds, Quiz.created_at)
-                .order_by(Quiz.created_at.desc())
-                .limit(pagination.page_size)
-                .offset((pagination.page - 1) * pagination.page_size)
             ).all()
             items = [AdminQuizPerformanceRecord.model_validate(dict(row._mapping)) for row in rows]
             return AdminQuizPerformancePage(items=items, pagination=pagination)
 
-    def list_quiz_performance(self) -> list[AdminQuizPerformanceRecord]:
+    async def list_quiz_performance(self) -> list[AdminQuizPerformanceRecord]:
         participant_expr = func.count(Attempt.attempt_id)
         submitted_expr = func.coalesce(
             func.sum(case((Attempt.status.in_(("submitted", "scored")), 1), else_=0)),
@@ -453,37 +466,41 @@ class PlatformStore:
             0,
         )
 
-        with self.session_factory() as session:
-            rows = session.execute(
-                select(
-                    Quiz.quiz_id,
-                    Quiz.title,
-                    Quiz.duration_seconds,
-                    participant_expr.label("participant_count"),
-                    submitted_expr.label("submitted_count"),
-                    scored_expr.label("scored_count"),
-                    func.avg(Result.percentage).label("average_percentage"),
-                    func.max(Result.percentage).label("top_percentage"),
+        async with self.session_factory() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        Quiz.quiz_id,
+                        Quiz.title,
+                        Quiz.duration_seconds,
+                        participant_expr.label("participant_count"),
+                        submitted_expr.label("submitted_count"),
+                        scored_expr.label("scored_count"),
+                        func.avg(Result.percentage).label("average_percentage"),
+                        func.max(Result.percentage).label("top_percentage"),
+                    )
+                    .select_from(Quiz)
+                    .outerjoin(Attempt, Attempt.quiz_id == Quiz.quiz_id)
+                    .outerjoin(Result, and_(Result.quiz_id == Quiz.quiz_id, Result.user_id == Attempt.user_id))
+                    .group_by(Quiz.quiz_id, Quiz.title, Quiz.duration_seconds, Quiz.created_at)
+                    .order_by(Quiz.created_at.desc())
                 )
-                .select_from(Quiz)
-                .outerjoin(Attempt, Attempt.quiz_id == Quiz.quiz_id)
-                .outerjoin(Result, and_(Result.quiz_id == Quiz.quiz_id, Result.user_id == Attempt.user_id))
-                .group_by(Quiz.quiz_id, Quiz.title, Quiz.duration_seconds, Quiz.created_at)
-                .order_by(Quiz.created_at.desc())
             ).all()
             return [AdminQuizPerformanceRecord.model_validate(dict(row._mapping)) for row in rows]
 
-    def list_quizzes_for_student(self, user_id: str) -> list[QuizCatalogItem]:
+    async def list_quizzes_for_student(self, user_id: str) -> list[QuizCatalogItem]:
         student_attempt = aliased(Attempt)
-        with self.session_factory.begin() as session:
-            rows = session.execute(
-                select(Quiz, student_attempt)
-                .outerjoin(
-                    student_attempt,
-                    and_(student_attempt.quiz_id == Quiz.quiz_id, student_attempt.user_id == user_id),
+        async with self.session_factory.begin() as session:
+            rows = (
+                await session.execute(
+                    select(Quiz, student_attempt)
+                    .outerjoin(
+                        student_attempt,
+                        and_(student_attempt.quiz_id == Quiz.quiz_id, student_attempt.user_id == user_id),
+                    )
+                    .where(or_(Quiz.lifecycle_status == "published", student_attempt.attempt_id.is_not(None)))
+                    .order_by(Quiz.created_at.desc())
                 )
-                .where(or_(Quiz.lifecycle_status == "published", student_attempt.attempt_id.is_not(None)))
-                .order_by(Quiz.created_at.desc())
             ).all()
             now = utc_now_epoch()
             items: list[QuizCatalogItem] = []
@@ -493,10 +510,12 @@ class PlatformStore:
                 items.append(self._quiz_to_catalog_item(quiz, attempt=attempt, now=now))
             return items
 
-    def get_quiz_metadata(self, quiz_id: str) -> dict[str, Any] | None:
-        with self.session_factory() as session:
-            quiz = session.execute(
-                select(Quiz).where(Quiz.quiz_id == quiz_id, Quiz.lifecycle_status == "published")
+    async def get_quiz_metadata(self, quiz_id: str) -> dict[str, Any] | None:
+        async with self.session_factory() as session:
+            quiz = (
+                await session.execute(
+                    select(Quiz).where(Quiz.quiz_id == quiz_id, Quiz.lifecycle_status == "published")
+                )
             ).scalar_one_or_none()
             if quiz is None:
                 return None
@@ -511,27 +530,29 @@ class PlatformStore:
                 "availability_end_at": quiz.availability_end_at,
             }
 
-    def get_quiz_definition(self, quiz_id: str) -> QuizDefinition | None:
-        with self.session_factory() as session:
-            quiz = session.get(Quiz, quiz_id)
+    async def get_quiz_definition(self, quiz_id: str) -> QuizDefinition | None:
+        async with self.session_factory() as session:
+            quiz = await session.get(Quiz, quiz_id)
             if quiz is None or quiz.raw_data is None:
                 return None
             return QuizDefinition.model_validate(quiz.raw_data)
 
-    def start_attempt(self, quiz_id: str, user_id: str) -> AttemptEnvelope:
+    async def start_attempt(self, quiz_id: str, user_id: str) -> AttemptEnvelope:
         now = utc_now_epoch()
         try:
-            with self.session_factory.begin() as session:
-                quiz = session.get(Quiz, quiz_id)
+            async with self.session_factory.begin() as session:
+                quiz = await session.get(Quiz, quiz_id)
                 if quiz is None:
                     raise LookupError("Quiz not found")
                 if quiz.lifecycle_status != "published":
                     raise LookupError("Quiz not found")
 
-                existing = session.execute(
-                    select(Attempt)
-                    .where(Attempt.quiz_id == quiz_id, Attempt.user_id == user_id)
-                    .with_for_update(skip_locked=False)
+                existing = (
+                    await session.execute(
+                        select(Attempt)
+                        .where(Attempt.quiz_id == quiz_id, Attempt.user_id == user_id)
+                        .with_for_update(skip_locked=False)
+                    )
                 ).scalar_one_or_none()
                 if existing is not None:
                     self._normalize_attempt_entity(existing, now)
@@ -567,12 +588,14 @@ class PlatformStore:
                     answers=None,
                 )
                 session.add(attempt)
-                session.flush()
+                await session.flush()
                 return self._attempt_envelope(attempt, now)
         except IntegrityError:
-            with self.session_factory.begin() as session:
-                existing = session.execute(
-                    select(Attempt).where(Attempt.quiz_id == quiz_id, Attempt.user_id == user_id)
+            async with self.session_factory.begin() as session:
+                existing = (
+                    await session.execute(
+                        select(Attempt).where(Attempt.quiz_id == quiz_id, Attempt.user_id == user_id)
+                    )
                 ).scalar_one_or_none()
                 if existing is None:
                     raise
@@ -580,13 +603,15 @@ class PlatformStore:
                 self._normalize_attempt_entity(existing, now)
                 return self._attempt_envelope(existing, now)
 
-    def get_attempt(self, attempt_id: str, user_id: str) -> dict[str, Any]:
+    async def get_attempt(self, attempt_id: str, user_id: str) -> dict[str, Any]:
         now = utc_now_epoch()
-        with self.session_factory.begin() as session:
-            row = session.execute(
-                select(Attempt, Quiz)
-                .join(Quiz, Quiz.quiz_id == Attempt.quiz_id)
-                .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
+        async with self.session_factory.begin() as session:
+            row = (
+                await session.execute(
+                    select(Attempt, Quiz)
+                    .join(Quiz, Quiz.quiz_id == Attempt.quiz_id)
+                    .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
+                )
             ).first()
             if row is None:
                 raise LookupError("Attempt not found")
@@ -606,16 +631,18 @@ class PlatformStore:
                 "duration_seconds": quiz.duration_seconds,
             }
 
-    def load_attempt_answers(self, attempt_id: str, user_id: str) -> dict[str, str]:
-        with self.session_factory() as session:
-            attempt = session.execute(
-                select(Attempt).where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
+    async def load_attempt_answers(self, attempt_id: str, user_id: str) -> dict[str, str]:
+        async with self.session_factory() as session:
+            attempt = (
+                await session.execute(
+                    select(Attempt).where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
+                )
             ).scalar_one_or_none()
             if attempt is None:
                 raise LookupError("Attempt not found")
             return self._answers_to_map(attempt.answers)
 
-    def autosave_attempt_answers(
+    async def autosave_attempt_answers(
         self,
         attempt_id: str,
         user_id: str,
@@ -625,11 +652,13 @@ class PlatformStore:
     ) -> dict[str, Any]:
         now = utc_now_epoch()
         incoming_answers = self._answers_to_map(answers)
-        with self.session_factory.begin() as session:
-            attempt = session.execute(
-                select(Attempt)
-                .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
-                .with_for_update()
+        async with self.session_factory.begin() as session:
+            attempt = (
+                await session.execute(
+                    select(Attempt)
+                    .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
+                    .with_for_update()
+                )
             ).scalar_one_or_none()
             if attempt is None:
                 raise LookupError("Attempt not found")
@@ -640,28 +669,29 @@ class PlatformStore:
             if attempt.status in {"submitted", "scored"}:
                 raise RuntimeError("Attempt has already been submitted")
 
-            # Merge with existing saved answers — incoming answers override,
-            # but previously saved answers for OTHER questions are preserved.
-            # This prevents multi-tab data loss.
+            # Merge with existing saved answers; incoming answers override while
+            # preserving answers for other questions to avoid multi-tab data loss.
             existing_answers = self._answers_to_map(attempt.answers)
             merged_answers = {**existing_answers, **incoming_answers}
 
             attempt.answers = self._map_to_answers_list(merged_answers)
-            session.flush()
+            await session.flush()
             return {
                 "attempt": self._attempt_record(attempt),
                 "saved_answer_count": len(merged_answers),
                 "saved_at": saved_at,
             }
 
-    def prepare_attempt_submission(self, attempt_id: str, user_id: str) -> dict[str, Any]:
+    async def prepare_attempt_submission(self, attempt_id: str, user_id: str) -> dict[str, Any]:
         now = utc_now_epoch()
-        with self.session_factory.begin() as session:
-            # Lock the row to serialize concurrent submission attempts
-            attempt = session.execute(
-                select(Attempt)
-                .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
-                .with_for_update()
+        async with self.session_factory.begin() as session:
+            # Lock the row to serialize concurrent submission attempts.
+            attempt = (
+                await session.execute(
+                    select(Attempt)
+                    .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
+                    .with_for_update()
+                )
             ).scalar_one_or_none()
             if attempt is None:
                 raise LookupError("Attempt not found")
@@ -673,7 +703,7 @@ class PlatformStore:
                 raise RuntimeError("Attempt has already been submitted")
             return self._attempt_record(attempt)
 
-    def finalize_attempt_submission(
+    async def finalize_attempt_submission(
         self,
         attempt_id: str,
         user_id: str,
@@ -681,16 +711,17 @@ class PlatformStore:
         submitted_at: int,
     ) -> dict[str, Any]:
         now = utc_now_epoch()
-        with self.session_factory.begin() as session:
-            attempt = session.execute(
-                select(Attempt)
-                .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
-                .with_for_update()
+        async with self.session_factory.begin() as session:
+            attempt = (
+                await session.execute(
+                    select(Attempt)
+                    .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
+                    .with_for_update()
+                )
             ).scalar_one_or_none()
             if attempt is None:
                 raise LookupError("Attempt not found")
 
-            # Guard against double-submission race condition
             self._normalize_attempt_entity(attempt, now)
             if attempt.status in {"submitted", "scored"}:
                 raise RuntimeError("Attempt has already been submitted")
@@ -700,31 +731,33 @@ class PlatformStore:
             attempt.status = "submitted"
             attempt.submitted_at = submitted_at
             attempt.answers = answers
-            session.flush()
+            await session.flush()
             return self._attempt_record(attempt)
 
-    def reopen_attempt_submission(self, attempt_id: str, user_id: str) -> dict[str, Any]:
-        with self.session_factory.begin() as session:
-            attempt = session.execute(
-                select(Attempt)
-                .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
-                .with_for_update()
+    async def reopen_attempt_submission(self, attempt_id: str, user_id: str) -> dict[str, Any]:
+        async with self.session_factory.begin() as session:
+            attempt = (
+                await session.execute(
+                    select(Attempt)
+                    .where(Attempt.attempt_id == attempt_id, Attempt.user_id == user_id)
+                    .with_for_update()
+                )
             ).scalar_one_or_none()
             if attempt is None:
                 raise LookupError("Attempt not found")
             if attempt.status == "submitted":
                 attempt.status = "active"
                 attempt.submitted_at = None
-            session.flush()
+            await session.flush()
             return self._attempt_record(attempt)
 
-    def mark_attempt_scored(self, attempt_id: str) -> None:
-        with self.session_factory.begin() as session:
-            attempt = session.get(Attempt, attempt_id)
+    async def mark_attempt_scored(self, attempt_id: str) -> None:
+        async with self.session_factory.begin() as session:
+            attempt = await session.get(Attempt, attempt_id)
             if attempt is not None and attempt.status != "expired":
                 attempt.status = "scored"
 
-    def save_result(
+    async def save_result(
         self,
         *,
         quiz_id: str,
@@ -748,9 +781,11 @@ class PlatformStore:
             "attempt_id": attempt_id,
         }
 
-        with self.session_factory.begin() as session:
-            record = session.execute(
-                select(Result).where(Result.quiz_id == quiz_id, Result.user_id == user_id)
+        async with self.session_factory.begin() as session:
+            record = (
+                await session.execute(
+                    select(Result).where(Result.quiz_id == quiz_id, Result.user_id == user_id)
+                )
             ).scalar_one_or_none()
             if record is None:
                 record = Result(
@@ -775,16 +810,18 @@ class PlatformStore:
                 record.raw_data = payload
 
             if attempt_id:
-                attempt = session.get(Attempt, attempt_id)
+                attempt = await session.get(Attempt, attempt_id)
                 if attempt is not None and attempt.status != "expired":
                     attempt.status = "scored"
 
         return QuizResultResponse.model_validate(payload)
 
-    def get_result(self, quiz_id: str, user_id: str) -> QuizResultResponse | None:
-        with self.session_factory() as session:
-            record = session.execute(
-                select(Result).where(Result.quiz_id == quiz_id, Result.user_id == user_id)
+    async def get_result(self, quiz_id: str, user_id: str) -> QuizResultResponse | None:
+        async with self.session_factory() as session:
+            record = (
+                await session.execute(
+                    select(Result).where(Result.quiz_id == quiz_id, Result.user_id == user_id)
+                )
             ).scalar_one_or_none()
             if record is None:
                 return None
@@ -801,9 +838,9 @@ class PlatformStore:
             payload.setdefault("attempt_id", record.attempt_id)
             return QuizResultResponse.model_validate(payload)
 
-    def _set_attempt_status(self, attempt_id: str, status: str) -> None:
-        with self.session_factory.begin() as session:
-            attempt = session.get(Attempt, attempt_id)
+    async def _set_attempt_status(self, attempt_id: str, status: str) -> None:
+        async with self.session_factory.begin() as session:
+            attempt = await session.get(Attempt, attempt_id)
             if attempt is not None:
                 attempt.status = status
 
@@ -833,10 +870,10 @@ class PlatformStore:
             "answers": attempt.answers or [],
         }
 
-    def _unique_quiz_id(self, requested_quiz_id: str) -> str:
+    async def _unique_quiz_id(self, requested_quiz_id: str) -> str:
         candidate = slugify(requested_quiz_id)
-        with self.session_factory() as session:
-            existing = session.get(Quiz, candidate)
+        async with self.session_factory() as session:
+            existing = await session.get(Quiz, candidate)
             if existing is None:
                 return candidate
         return f"{candidate}-{utc_now_epoch()}"

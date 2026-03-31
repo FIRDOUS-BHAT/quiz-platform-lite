@@ -1,3 +1,4 @@
+import asyncio
 import argparse
 import json
 import sys
@@ -31,24 +32,26 @@ def load_quiz(file_path: str, quiz_id: str) -> QuizDefinition:
         sys.exit(1)
 
 
-def seed_quiz(file_path: str, quiz_id: str, lifecycle_status: QuizLifecycleStatus) -> None:
+async def seed_quiz(file_path: str, quiz_id: str, lifecycle_status: QuizLifecycleStatus) -> None:
     quiz = load_quiz(file_path, quiz_id)
     engine = create_db_engine()
     try:
-        initialize_schema(engine)
+        await initialize_schema(engine)
         session_factory = create_session_factory(engine)
-        bootstrap_admin(session_factory)
+        await bootstrap_admin(session_factory)
 
-        with session_factory() as session:
-            admin = session.execute(
+        async with session_factory() as session:
+            admin = (
+                await session.execute(
                 select(User).where(User.email == normalize_email(settings.bootstrap_admin_email))
+                )
             ).scalar_one_or_none()
 
         if admin is None:
             print("Error: bootstrap admin account was not found.")
             sys.exit(1)
 
-        created = PlatformStore(session_factory).create_quiz(
+        created = await PlatformStore(session_factory).create_quiz(
             quiz,
             created_by=admin.user_id,
             source_filename=Path(file_path).name,
@@ -56,7 +59,7 @@ def seed_quiz(file_path: str, quiz_id: str, lifecycle_status: QuizLifecycleStatu
         )
         print(f"Seeded quiz '{created['title']}' as id '{created['quiz_id']}'.")
     finally:
-        engine.dispose()
+        await engine.dispose()
 
 
 if __name__ == "__main__":
@@ -71,4 +74,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    seed_quiz(args.file, args.id, args.status)
+    asyncio.run(seed_quiz(args.file, args.id, args.status))

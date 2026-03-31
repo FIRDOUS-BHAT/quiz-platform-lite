@@ -12,6 +12,7 @@ from app.config import settings
 from app.dependencies import (
     get_current_admin,
     get_current_user,
+    get_optional_admin_user,
     get_optional_current_user,
     get_store,
 )
@@ -158,8 +159,8 @@ def _build_answer_map_from_form(form) -> dict[str, str]:
     return answers
 
 
-def _load_quiz_definition_for_attempt(*, store, quiz_id: str) -> QuizDefinition | None:
-    return store.get_quiz_definition(quiz_id)
+async def _load_quiz_definition_for_attempt(*, store, quiz_id: str) -> QuizDefinition | None:
+    return await store.get_quiz_definition(quiz_id)
 
 
 def _validated_answer_map(quiz: QuizDefinition, answers: dict[str, str]) -> dict[str, str]:
@@ -232,6 +233,10 @@ def _redirect_for_role(user: UserSession) -> str:
     return "/app/admin" if user.role == UserRole.ADMIN else "/app/student"
 
 
+def _session_cookie_name_for_role(role: UserRole) -> str:
+    return settings.admin_session_cookie_name if role == UserRole.ADMIN else settings.student_session_cookie_name
+
+
 def _render_admin(
     request: Request,
     template_name: str,
@@ -252,7 +257,7 @@ def _render_admin(
     )
 
 
-def _authenticate_login_request(
+async def _authenticate_login_request(
     *,
     email: str,
     password: str,
@@ -264,25 +269,27 @@ def _authenticate_login_request(
     except Exception as exc:
         return None, _redirect(failure_url, str(exc), "error")
 
-    record = store.authenticate_user(payload.email)
+    record = await store.authenticate_user(payload.email)
     if not record or not verify_password(payload.password, record["password_hash"]):
         return None, _redirect(failure_url, "Invalid email or password", "error")
 
     return UserSession.model_validate(record), None
 
 
-def _issue_login_response(*, store, user: UserSession, redirect_url: str) -> RedirectResponse:
+async def _issue_login_response(*, store, user: UserSession, redirect_url: str) -> RedirectResponse:
     session_token = new_session_token()
-    expires_at = store.create_session(user.user_id, session_token)
+    expires_at = await store.create_session(user.user_id, session_token)
     response = _redirect(redirect_url, "Signed in successfully", "success")
+    response.delete_cookie(settings.session_cookie_name, path="/")
+    response.delete_cookie(settings.session_cookie_name, path="/app")
     response.set_cookie(
-        settings.session_cookie_name,
+        _session_cookie_name_for_role(user.role),
         session_token,
         httponly=True,
         secure=settings.secure_cookies,
         max_age=settings.session_ttl_seconds,
         samesite="lax",
-        path="/",
+        path="/app",
     )
     response.headers["X-Session-Expires-At"] = str(expires_at)
     return response
@@ -290,7 +297,7 @@ def _issue_login_response(*, store, user: UserSession, redirect_url: str) -> Red
 
 @router.get("/app", response_class=HTMLResponse)
 async def app_home(request: Request, store=Depends(get_store)) -> RedirectResponse:
-    user = get_optional_current_user(request, store=store)
+    user = await get_optional_current_user(request, store=store)
     if user is None:
         return _redirect("/app/login")
     return _redirect(_redirect_for_role(user))
@@ -298,7 +305,7 @@ async def app_home(request: Request, store=Depends(get_store)) -> RedirectRespon
 
 @router.get("/app/login", response_class=HTMLResponse)
 async def login_page(request: Request, store=Depends(get_store)) -> HTMLResponse:
-    current_user = get_optional_current_user(request, store=store)
+    current_user = await get_optional_current_user(request, store=store, scope="student")
     if current_user:
         return _redirect(_redirect_for_role(current_user))
     return _render(request, "login.html", current_user=None)
@@ -310,7 +317,7 @@ async def login_submit(
     password: str = Form(...),
     store=Depends(get_store),
 ) -> RedirectResponse:
-    user, error_response = _authenticate_login_request(
+    user, error_response = await _authenticate_login_request(
         email=email,
         password=password,
         store=store,
@@ -322,12 +329,12 @@ async def login_submit(
     if user.role != UserRole.STUDENT:
         return _redirect("/app/admin/login", "Admin accounts must use the admin sign in page", "info")
 
-    return _issue_login_response(store=store, user=user, redirect_url="/app/student")
+    return await _issue_login_response(store=store, user=user, redirect_url="/app/student")
 
 
 @router.get("/app/admin/login", response_class=HTMLResponse)
 async def admin_login_page(request: Request, store=Depends(get_store)) -> HTMLResponse:
-    current_user = get_optional_current_user(request, store=store)
+    current_user = await get_optional_current_user(request, store=store, scope="admin")
     if current_user:
         return _redirect(_redirect_for_role(current_user))
     return _render(request, "admin_login.html", current_user=None)
@@ -339,7 +346,7 @@ async def admin_login_submit(
     password: str = Form(...),
     store=Depends(get_store),
 ) -> RedirectResponse:
-    user, error_response = _authenticate_login_request(
+    user, error_response = await _authenticate_login_request(
         email=email,
         password=password,
         store=store,
@@ -351,12 +358,12 @@ async def admin_login_submit(
     if user.role != UserRole.ADMIN:
         return _redirect("/app/admin/login", "This account does not have admin access", "error")
 
-    return _issue_login_response(store=store, user=user, redirect_url="/app/admin")
+    return await _issue_login_response(store=store, user=user, redirect_url="/app/admin")
 
 
 @router.get("/app/register", response_class=HTMLResponse)
 async def register_page(request: Request, store=Depends(get_store)) -> HTMLResponse:
-    current_user = get_optional_current_user(request, store=store)
+    current_user = await get_optional_current_user(request, store=store, scope="student")
     if current_user:
         return _redirect(_redirect_for_role(current_user))
     return _render(request, "register.html", current_user=None, allow_registration=settings.allow_open_registration)
@@ -374,7 +381,7 @@ async def register_submit(
 
     try:
         payload = RegisterRequest(full_name=full_name, email=email, password=password)
-        store.create_user(payload)
+        await store.create_user(payload)
     except Exception as exc:
         return _redirect("/app/register", str(exc), "error")
 
@@ -384,33 +391,61 @@ async def register_submit(
 @router.post("/app/logout")
 async def logout_submit(
     request: Request,
+    session_scope: str = Form("student"),
     store=Depends(get_store),
 ) -> RedirectResponse:
-    current_user = get_optional_current_user(request, store=store)
-    token = request.cookies.get(settings.session_cookie_name)
-    if token:
-        store.delete_session(token)
-    redirect_url = "/app/admin/login" if current_user and current_user.role == UserRole.ADMIN else "/app/login"
+    if session_scope == "admin":
+        cookie_name = settings.admin_session_cookie_name
+        redirect_url = "/app/admin/login"
+    elif session_scope == "student":
+        cookie_name = settings.student_session_cookie_name
+        redirect_url = "/app/login"
+    else:
+        cookie_name = ""
+        redirect_url = "/app/login"
+
+    tokens_to_delete: list[str] = []
+    if cookie_name:
+        token = request.cookies.get(cookie_name)
+        if token:
+            tokens_to_delete.append(token)
+    else:
+        for name in (
+            settings.student_session_cookie_name,
+            settings.admin_session_cookie_name,
+            settings.session_cookie_name,
+        ):
+            token = request.cookies.get(name)
+            if token and token not in tokens_to_delete:
+                tokens_to_delete.append(token)
+
+    for token in tokens_to_delete:
+        await store.delete_session(token)
+
     response = _redirect(redirect_url, "Signed out", "success")
+    if cookie_name:
+        response.delete_cookie(cookie_name, path="/app")
+    else:
+        response.delete_cookie(settings.student_session_cookie_name, path="/app")
+        response.delete_cookie(settings.admin_session_cookie_name, path="/app")
     response.delete_cookie(settings.session_cookie_name, path="/")
+    response.delete_cookie(settings.session_cookie_name, path="/app")
     return response
 
 
 @router.get("/app/admin", response_class=HTMLResponse)
 async def admin_overview(
     request: Request,
-    current_user: UserSession | None = Depends(get_optional_current_user),
+    current_user: UserSession | None = Depends(get_optional_admin_user),
     store=Depends(get_store),
 ) -> HTMLResponse:
     if current_user is None:
         return _redirect("/app/admin/login")
-    if current_user.role != UserRole.ADMIN:
-        return _redirect("/app/student", "Admin access required", "error")
 
-    summary = store.get_admin_summary()
-    recent_quizzes = store.list_quiz_catalog_page(page=1, page_size=ADMIN_OVERVIEW_PREVIEW_SIZE)
-    recent_students = store.list_registered_students(page=1, page_size=ADMIN_OVERVIEW_PREVIEW_SIZE)
-    recent_attempts = store.list_participation_records(page=1, page_size=ADMIN_OVERVIEW_PREVIEW_SIZE)
+    summary = await store.get_admin_summary()
+    recent_quizzes = await store.list_quiz_catalog_page(page=1, page_size=ADMIN_OVERVIEW_PREVIEW_SIZE)
+    recent_students = await store.list_registered_students(page=1, page_size=ADMIN_OVERVIEW_PREVIEW_SIZE)
+    recent_attempts = await store.list_participation_records(page=1, page_size=ADMIN_OVERVIEW_PREVIEW_SIZE)
     return _render_admin(
         request,
         "admin_overview.html",
@@ -438,12 +473,12 @@ async def admin_quizzes(
     quiz_q = _normalized_text(quiz_q)
     performance_q = _normalized_text(performance_q)
 
-    quiz_catalog = store.list_quiz_catalog_page(
+    quiz_catalog = await store.list_quiz_catalog_page(
         page=quiz_page,
         page_size=quiz_page_size,
         query=quiz_q,
     )
-    quiz_performance = store.list_quiz_performance_page(
+    quiz_performance = await store.list_quiz_performance_page(
         page=performance_page,
         page_size=performance_page_size,
         query=performance_q,
@@ -479,7 +514,7 @@ async def admin_students(
     store=Depends(get_store),
 ) -> HTMLResponse:
     student_q = _normalized_text(student_q)
-    students = store.list_registered_students(
+    students = await store.list_registered_students(
         page=student_page,
         page_size=student_page_size,
         query=student_q,
@@ -512,7 +547,7 @@ async def admin_attempts(
     if participation_status not in ADMIN_ATTEMPT_STATUSES:
         participation_status = None
 
-    participation_records = store.list_participation_records(
+    participation_records = await store.list_participation_records(
         page=participation_page,
         page_size=participation_page_size,
         query=participation_q,
@@ -524,7 +559,7 @@ async def admin_attempts(
         "admin_attempts.html",
         current_user=current_user,
         admin_section="attempts",
-        quizzes=store.list_quizzes_for_admin(),
+        quizzes=await store.list_quizzes_for_admin(),
         participation_records=participation_records,
         participation_filters={
             "query": participation_q,
@@ -555,7 +590,7 @@ async def admin_student_detail(
     if attempt_status not in ADMIN_ATTEMPT_STATUSES:
         attempt_status = None
 
-    student = store.get_student_admin_record(user_id)
+    student = await store.get_student_admin_record(user_id)
     if student is None:
         return _render_admin(
             request,
@@ -564,7 +599,7 @@ async def admin_student_detail(
             admin_section="students",
             student=None,
             student_attempts=None,
-            quizzes=store.list_quizzes_for_admin(),
+            quizzes=await store.list_quizzes_for_admin(),
             attempt_filters={
                 "query": attempt_q,
                 "quiz_id": attempt_quiz_id,
@@ -576,7 +611,7 @@ async def admin_student_detail(
             error="Student not found",
         )
 
-    student_attempts = store.list_participation_records(
+    student_attempts = await store.list_participation_records(
         page=attempt_page,
         page_size=attempt_page_size,
         query=attempt_q,
@@ -591,7 +626,7 @@ async def admin_student_detail(
         admin_section="students",
         student=student,
         student_attempts=student_attempts,
-        quizzes=store.list_quizzes_for_admin(),
+        quizzes=await store.list_quizzes_for_admin(),
         attempt_filters={
             "query": attempt_q,
             "quiz_id": attempt_quiz_id,
@@ -625,7 +660,7 @@ async def admin_upload_quiz(
                 "availability_end_at": parsed_end if _normalized_text(availability_end_at) is not None else quiz.availability_end_at,
             }
         )
-        created = store.create_quiz(
+        created = await store.create_quiz(
             quiz,
             created_by=current_user.user_id,
             source_filename=file.filename,
@@ -651,7 +686,7 @@ async def admin_update_quiz_settings(
     del current_user
     redirect_url = _safe_admin_quiz_return_url(next_url)
     try:
-        updated = store.update_quiz_settings(
+        updated = await store.update_quiz_settings(
             quiz_id,
             lifecycle_status=_validated_lifecycle_status(lifecycle_status),
             availability_start_at=_parse_datetime_local(availability_start_at),
@@ -671,7 +706,7 @@ async def student_dashboard(
     current_user: UserSession = Depends(get_current_user),
     store=Depends(get_store),
 ) -> HTMLResponse:
-    quizzes = store.list_quizzes_for_student(current_user.user_id)
+    quizzes = await store.list_quizzes_for_student(current_user.user_id)
     return _render(request, "student_dashboard.html", current_user=current_user, quizzes=quizzes)
 
 
@@ -682,7 +717,7 @@ async def student_start_attempt(
     store=Depends(get_store),
 ) -> RedirectResponse:
     try:
-        attempt = store.start_attempt(quiz_id, current_user.user_id)
+        attempt = await store.start_attempt(quiz_id, current_user.user_id)
     except LookupError:
         return _redirect("/app/student", "Quiz not found", "error")
     except TimeoutError as exc:
@@ -707,16 +742,16 @@ async def student_attempt_page(
     store=Depends(get_store),
 ) -> HTMLResponse:
     try:
-        attempt = store.get_attempt(attempt_id, current_user.user_id)
+        attempt = await store.get_attempt(attempt_id, current_user.user_id)
     except LookupError:
         return _render(request, "attempt.html", current_user=current_user, error="Attempt not found", attempt=None, attempt_view=None)
 
-    quiz = _load_quiz_definition_for_attempt(store=store, quiz_id=attempt["quiz_id"])
+    quiz = await _load_quiz_definition_for_attempt(store=store, quiz_id=attempt["quiz_id"])
     if quiz is None:
         return _render(request, "attempt.html", current_user=current_user, error="Quiz definition not available", attempt=attempt, attempt_view=None)
 
     try:
-        saved_answers = store.load_attempt_answers(attempt_id, current_user.user_id)
+        saved_answers = await store.load_attempt_answers(attempt_id, current_user.user_id)
     except LookupError:
         return _render(request, "attempt.html", current_user=current_user, error="Attempt not found", attempt=attempt, attempt_view=None)
 
@@ -762,7 +797,7 @@ async def student_autosave_attempt(
     store=Depends(get_store),
 ) -> AttemptAutosaveResponse:
     try:
-        attempt = store.prepare_attempt_submission(attempt_id, current_user.user_id)
+        attempt = await store.prepare_attempt_submission(attempt_id, current_user.user_id)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except TimeoutError as exc:
@@ -770,7 +805,7 @@ async def student_autosave_attempt(
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    quiz = _load_quiz_definition_for_attempt(store=store, quiz_id=attempt["quiz_id"])
+    quiz = await _load_quiz_definition_for_attempt(store=store, quiz_id=attempt["quiz_id"])
     if quiz is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Quiz definition not available")
 
@@ -783,7 +818,7 @@ async def student_autosave_attempt(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     now = utc_now_epoch()
-    saved = store.autosave_attempt_answers(
+    saved = await store.autosave_attempt_answers(
         attempt_id,
         current_user.user_id,
         [answer.model_dump(mode="json") for answer in _ordered_answer_models(quiz, answer_map)],
@@ -811,8 +846,8 @@ async def student_submit_attempt(
     submission_saved = False
 
     try:
-        attempt = store.prepare_attempt_submission(attempt_id, current_user.user_id)
-        quiz = _load_quiz_definition_for_attempt(store=store, quiz_id=attempt["quiz_id"])
+        attempt = await store.prepare_attempt_submission(attempt_id, current_user.user_id)
+        quiz = await _load_quiz_definition_for_attempt(store=store, quiz_id=attempt["quiz_id"])
         if quiz is None:
             return _redirect(
                 f"/app/student/attempts/{attempt_id}?page={current_page}",
@@ -820,13 +855,13 @@ async def student_submit_attempt(
                 "error",
             )
 
-        saved_answers = store.load_attempt_answers(attempt_id, current_user.user_id)
+        saved_answers = await store.load_attempt_answers(attempt_id, current_user.user_id)
         submitted_answers = _build_answer_map_from_form(form)
         merged_answers = _validated_answer_map(quiz, {**saved_answers, **submitted_answers})
         payload = AttemptSubmissionRequest(answers=_ordered_answer_models(quiz, merged_answers))
         now = utc_now_epoch()
         serialized_answers = [answer.model_dump(mode="json") for answer in payload.answers]
-        attempt = store.finalize_attempt_submission(
+        attempt = await store.finalize_attempt_submission(
             attempt_id,
             current_user.user_id,
             serialized_answers,
@@ -835,7 +870,7 @@ async def student_submit_attempt(
         submission_saved = True
         submission_id = hashlib.sha256(f"{attempt['quiz_id']}:{current_user.user_id}:{attempt_id}".encode("utf-8")).hexdigest()
         score = calculate_score(quiz.model_dump(mode="json"), serialized_answers)
-        store.save_result(
+        await store.save_result(
             quiz_id=attempt["quiz_id"],
             user_id=current_user.user_id,
             score=score["score"],
@@ -852,7 +887,7 @@ async def student_submit_attempt(
     except RuntimeError as exc:
         if attempt is None:
             try:
-                attempt = store.get_attempt(attempt_id, current_user.user_id)
+                attempt = await store.get_attempt(attempt_id, current_user.user_id)
             except LookupError:
                 return _redirect("/app/student", str(exc), "info")
         if attempt is not None:
@@ -861,7 +896,7 @@ async def student_submit_attempt(
     except Exception as exc:
         if submission_saved and hasattr(store, "reopen_attempt_submission"):
             try:
-                store.reopen_attempt_submission(attempt_id, current_user.user_id)
+                await store.reopen_attempt_submission(attempt_id, current_user.user_id)
             except Exception as reopen_exc:
                 logger.error("Failed to reopen attempt %s after submission error: %s", attempt_id, reopen_exc)
         return _redirect(f"/app/student/attempts/{attempt_id}?page={current_page}", f"Submission failed: {exc}", "error")
@@ -876,7 +911,7 @@ async def student_result_page(
     current_user: UserSession = Depends(get_current_user),
     store=Depends(get_store),
 ) -> HTMLResponse:
-    result = store.get_result(quiz_id, current_user.user_id)
+    result = await store.get_result(quiz_id, current_user.user_id)
     if result is None:
         result = ProcessingResultResponse()
     return _render(request, "result.html", current_user=current_user, quiz_id=quiz_id, result=result)

@@ -1162,6 +1162,7 @@
           {% endif %}
           <form action="/app/logout" method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+            <input type="hidden" name="session_scope" value="{{ current_user.role.value }}">
             <button type="submit" class="secondary">Sign out</button>
           </form>
         {% else %}
