@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<div class="auth-layout">
+  <section class="auth-aside">
+    <span class="eyebrow">✦ Student Registration</span>
+    <h1>Create your student account</h1>
+    <p class="hero-lead">Use one account for all available test series, attempts, and results.</p>
+    <div class="detail-grid" style="margin-top: 24px;">
+      <div class="detail-tile">
+        <div class="meta">🔐 Identity</div>
+        <strong>Use your real name and email</strong>
+      </div>
+      <div class="detail-tile">
+        <div class="meta">🌐 Access</div>
+        <strong>One account across all tests</strong>
+      </div>
+      <div class="detail-tile">
+        <div class="meta">📈 Results</div>
+        <strong>Return to scored results anytime</strong>
+      </div>
+    </div>
+    <div class="pill-row" style="margin-top: 24px;">
+      <span class="pill">Quick setup</span>
+      <span class="pill">Secure account</span>
+      <span class="pill">Free access</span>
+    </div>
+  </section>
+
+  <section class="auth-panel">
+    <div>
+      <span class="eyebrow">Get Started</span>
+      <h2>Register</h2>
+      <p class="meta">Create your student account, then sign in to start available tests.</p>
+    </div>
+    {% if allow_registration %}
+      <form method="post" action="/app/register" class="stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+        <div>
+          <label for="full_name">Full name</label>
+          <input id="full_name" name="full_name" type="text" placeholder="John Doe" required autocomplete="name">
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" placeholder="you@example.com" required autocomplete="email">
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" placeholder="Minimum 8 characters" minlength="8" required autocomplete="new-password">
+        </div>
+        <button type="submit">Create Account →</button>
+      <div class="form-note">
+        Already registered? <a href="/app/login" class="text-link">Sign in here</a>
+      </div>
+    </form>
+    {% else %}
+      <div class="empty-state">
+        <p style="font-size: 1.25rem; margin-bottom: 8px;">🔒</p>
+        <strong>Registration Closed</strong>
+        <p class="meta" style="margin-top: 8px;">Open registration is currently disabled. Contact your administrator for access.</p>
+        <a href="/app/login" class="button secondary small">Back to Sign In</a>
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

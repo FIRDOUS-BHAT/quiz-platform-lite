@@ -1,0 +1,326 @@
+{% extends "admin_shell.html" %}
+{% block title %}Quiz Management{% endblock %}
+{% block admin_content %}
+<section class="hero">
+  <div class="hero-grid">
+    <div>
+      <span class="eyebrow">📝 Quizzes</span>
+      <h1>Control quiz lifecycle, schedule release windows, and review performance from one place.</h1>
+      <p class="hero-lead">This page now handles workbook import, draft versus published state, release windows, and quiz-level analytics without pushing those controls into the student flow.</p>
+    </div>
+    <div class="hero-side">
+      <div class="hero-panel">
+        <div class="muted-strong">📊 Catalog size</div>
+        <div class="detail-grid" style="margin-top: 12px;">
+          <div class="detail-tile">
+            <div class="meta">Quizzes</div>
+            <strong>{{ quiz_catalog.pagination.total_items }}</strong>
+          </div>
+          <div class="detail-tile">
+            <div class="meta">Analytics rows</div>
+            <strong>{{ quiz_performance.pagination.total_items }}</strong>
+          </div>
+        </div>
+      </div>
+      <div class="hero-panel">
+        <div class="muted-strong">📋 Workbook format</div>
+        <ul>
+          <li><code>metadata</code> sheet with rows like <code>title</code>, <code>description</code>, <code>duration_seconds</code>, and optional <code>availability_start_at</code> / <code>availability_end_at</code>.</li>
+          <li><code>questions</code> sheet with columns <code>question_id</code>, <code>question_text</code>, <code>option_a</code> to <code>option_d</code>, and <code>correct_option</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="grid">
+  <section class="card">
+    <div class="section-head">
+      <div>
+        <h2>📤 Upload Test Series</h2>
+        <p class="meta">Import a workbook, choose its initial lifecycle state, and optionally set a release window.</p>
+      </div>
+      <span class="badge pending">Excel Import</span>
+    </div>
+    <form action="/app/admin/upload" method="post" enctype="multipart/form-data" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <div>
+        <label for="file">Excel Workbook</label>
+        <input id="file" name="file" type="file" accept=".xlsx,.xlsm" required>
+      </div>
+      <div class="detail-grid">
+        <div>
+          <label for="lifecycle_status">Initial status</label>
+          <select id="lifecycle_status" name="lifecycle_status">
+            {% for option in lifecycle_status_options %}
+              <option value="{{ option }}" {% if option == "published" %}selected{% endif %}>{{ option|title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="availability_start_at">Opens at (UTC)</label>
+          <input id="availability_start_at" name="availability_start_at" type="datetime-local">
+        </div>
+        <div>
+          <label for="availability_end_at">Closes at (UTC)</label>
+          <input id="availability_end_at" name="availability_end_at" type="datetime-local">
+        </div>
+      </div>
+      <button type="submit">Import Workbook →</button>
+    </form>
+    <div class="form-note">Leave the schedule blank to keep the quiz continuously available whenever its lifecycle status is <strong>Published</strong>.</div>
+  </section>
+
+  <section class="list-card">
+    <div class="list-head">
+      <div>
+        <h2>💡 Why this page exists</h2>
+        <p class="meta">Quiz publishing and quiz reporting share the same domain, so they stay together while student and attempt operations stay separate.</p>
+      </div>
+      <span class="badge active">Focused view</span>
+    </div>
+    <div class="list-stack">
+      <div class="list-item">
+        <strong>🔄 Lifecycle control</strong>
+        <div class="meta">Keep quizzes in draft until they are reviewed, publish them when ready, and archive them when they are no longer active.</div>
+      </div>
+      <div class="list-item">
+        <strong>📅 Release windows</strong>
+        <div class="meta">Open and close a test series on schedule so students only start during the intended window.</div>
+      </div>
+      <div class="list-item">
+        <strong>📈 Performance review</strong>
+        <div class="meta">Track participant counts, submission volume, and score quality per quiz.</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<section class="table-panel">
+  <div class="section-head">
+    <div>
+      <h2>📋 Quiz Catalog</h2>
+      <p class="meta">Manage drafts, live quizzes, archive state, and release windows.</p>
+    </div>
+    <span class="badge active">{{ quiz_catalog.pagination.total_items }} quizzes</span>
+  </div>
+  <form method="get" action="/app/admin/quizzes" class="table-toolbar">
+    <input type="hidden" name="performance_page" value="{{ quiz_performance.pagination.page }}">
+    <input type="hidden" name="performance_page_size" value="{{ performance_filters.page_size }}">
+    <input type="hidden" name="performance_q" value="{{ performance_filters.query or '' }}">
+    <div class="filters-grid">
+      <div class="field-group">
+        <label for="quiz_q">Search quizzes</label>
+        <input id="quiz_q" type="text" name="quiz_q" value="{{ quiz_filters.query or '' }}" placeholder="Quiz title, ID, or description">
+      </div>
+      <div class="field-group">
+        <label for="quiz_page_size">Rows per page</label>
+        <select id="quiz_page_size" name="quiz_page_size">
+          {% for page_size in [10, 25, 50, 100] %}
+            <option value="{{ page_size }}" {% if quiz_filters.page_size == page_size %}selected{% endif %}>{{ page_size }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field-group">
+        <label>&nbsp;</label>
+        <div class="toolbar-actions">
+          <button type="submit" class="small">Apply</button>
+          <a class="button secondary small" href="{{ query_url(request, quiz_q=None, quiz_page=1) }}">Reset</a>
+        </div>
+      </div>
+    </div>
+  </form>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Quiz</th>
+          <th>Lifecycle</th>
+          <th>Window</th>
+          <th>Duration</th>
+          <th>Description</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for quiz in quiz_catalog.items %}
+          <tr>
+            <td>
+              <strong>{{ quiz.title }}</strong>
+              <div class="meta mono">{{ quiz.quiz_id }}</div>
+              <div class="meta">Created {{ quiz.created_at|datetime }}</div>
+            </td>
+            <td>
+              <span class="badge {% if quiz.lifecycle_status == 'published' %}active{% elif quiz.lifecycle_status == 'draft' %}pending{% elif quiz.lifecycle_status == 'archived' %}expired{% endif %}">
+                {{ quiz.lifecycle_status|title }}
+              </span>
+              <div class="meta" style="margin-top: 6px;">
+                {% if quiz.availability_status == "upcoming" %}
+                  Opens later
+                {% elif quiz.availability_status == "closed" %}
+                  Window closed
+                {% elif quiz.availability_status == "available" %}
+                  Available now
+                {% else %}
+                  {{ quiz.availability_status|title }}
+                {% endif %}
+              </div>
+            </td>
+            <td>
+              {% if quiz.availability_start_at or quiz.availability_end_at %}
+                <div class="meta">Opens {{ quiz.availability_start_at|datetime if quiz.availability_start_at else "Immediately" }}</div>
+                <div class="meta">Closes {{ quiz.availability_end_at|datetime if quiz.availability_end_at else "No closing time" }}</div>
+              {% else %}
+                <div class="meta">Always open when published</div>
+              {% endif %}
+            </td>
+            <td>{{ quiz.duration_seconds|duration }}</td>
+            <td>{{ quiz.description or "—" }}</td>
+            <td>
+              <form method="post" action="/app/admin/quizzes/{{ quiz.quiz_id }}/settings" class="stack">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                <input type="hidden" name="next_url" value="{{ query_url(request) }}">
+                <div class="field-group">
+                  <label for="lifecycle_{{ loop.index }}">Status</label>
+                  <select id="lifecycle_{{ loop.index }}" name="lifecycle_status">
+                    {% for option in lifecycle_status_options %}
+                      <option value="{{ option }}" {% if quiz.lifecycle_status == option %}selected{% endif %}>{{ option|title }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="field-group">
+                  <label for="start_{{ loop.index }}">Opens at (UTC)</label>
+                  <input id="start_{{ loop.index }}" name="availability_start_at" type="datetime-local" value="{{ quiz.availability_start_at|datetime_local }}">
+                </div>
+                <div class="field-group">
+                  <label for="end_{{ loop.index }}">Closes at (UTC)</label>
+                  <input id="end_{{ loop.index }}" name="availability_end_at" type="datetime-local" value="{{ quiz.availability_end_at|datetime_local }}">
+                </div>
+                <button type="submit" class="small">Save</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6" class="meta">No quizzes match the current filters.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination">
+    <div class="pagination-summary">
+      Showing {{ quiz_catalog.pagination.start_item }}-{{ quiz_catalog.pagination.end_item }} of {{ quiz_catalog.pagination.total_items }}
+    </div>
+    {% if quiz_catalog.pagination.total_pages > 1 %}
+      <div class="pagination-group">
+        {% if quiz_catalog.pagination.has_prev %}
+          <a class="button secondary small" href="{{ query_url(request, quiz_page=quiz_catalog.pagination.page - 1) }}">← Previous</a>
+        {% endif %}
+        {% for page_number in quiz_page_numbers %}
+          {% if page_number == quiz_catalog.pagination.page %}
+            <span class="badge active">{{ page_number }}</span>
+          {% else %}
+            <a class="button secondary small" href="{{ query_url(request, quiz_page=page_number) }}">{{ page_number }}</a>
+          {% endif %}
+        {% endfor %}
+        {% if quiz_catalog.pagination.has_next %}
+          <a class="button secondary small" href="{{ query_url(request, quiz_page=quiz_catalog.pagination.page + 1) }}">Next →</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="table-panel">
+  <div class="section-head">
+    <div>
+      <h2>📈 Quiz Performance</h2>
+      <p class="meta">High-level performance by published test series.</p>
+    </div>
+    <span class="badge scored">{{ quiz_performance.pagination.total_items }} analytics rows</span>
+  </div>
+  <form method="get" action="/app/admin/quizzes" class="table-toolbar">
+    <input type="hidden" name="quiz_page" value="{{ quiz_catalog.pagination.page }}">
+    <input type="hidden" name="quiz_page_size" value="{{ quiz_filters.page_size }}">
+    <input type="hidden" name="quiz_q" value="{{ quiz_filters.query or '' }}">
+    <div class="filters-grid">
+      <div class="field-group">
+        <label for="performance_q">Search analytics</label>
+        <input id="performance_q" type="text" name="performance_q" value="{{ performance_filters.query or '' }}" placeholder="Quiz title, ID, or description">
+      </div>
+      <div class="field-group">
+        <label for="performance_page_size">Rows per page</label>
+        <select id="performance_page_size" name="performance_page_size">
+          {% for page_size in [10, 25, 50, 100] %}
+            <option value="{{ page_size }}" {% if performance_filters.page_size == page_size %}selected{% endif %}>{{ page_size }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field-group">
+        <label>&nbsp;</label>
+        <div class="toolbar-actions">
+          <button type="submit" class="small">Apply</button>
+          <a class="button secondary small" href="{{ query_url(request, performance_q=None, performance_page=1) }}">Reset</a>
+        </div>
+      </div>
+    </div>
+  </form>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Quiz</th>
+          <th>Participants</th>
+          <th>Submitted</th>
+          <th>Scored</th>
+          <th>Average %</th>
+          <th>Top %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in quiz_performance.items %}
+          <tr>
+            <td>
+              <strong>{{ row.title }}</strong>
+              <div class="meta mono">{{ row.quiz_id }}</div>
+              <div class="meta">{{ row.duration_seconds|duration }}</div>
+            </td>
+            <td>{{ row.participant_count }}</td>
+            <td>{{ row.submitted_count }}</td>
+            <td>{{ row.scored_count }}</td>
+            <td>{{ "%.2f"|format(row.average_percentage) if row.average_percentage is not none else "—" }}</td>
+            <td>{{ "%.2f"|format(row.top_percentage) if row.top_percentage is not none else "—" }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6" class="meta">No quiz performance data yet.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination">
+    <div class="pagination-summary">
+      Showing {{ quiz_performance.pagination.start_item }}-{{ quiz_performance.pagination.end_item }} of {{ quiz_performance.pagination.total_items }}
+    </div>
+    {% if quiz_performance.pagination.total_pages > 1 %}
+      <div class="pagination-group">
+        {% if quiz_performance.pagination.has_prev %}
+          <a class="button secondary small" href="{{ query_url(request, performance_page=quiz_performance.pagination.page - 1) }}">← Previous</a>
+        {% endif %}
+        {% for page_number in performance_page_numbers %}
+          {% if page_number == quiz_performance.pagination.page %}
+            <span class="badge scored">{{ page_number }}</span>
+          {% else %}
+            <a class="button secondary small" href="{{ query_url(request, performance_page=page_number) }}">{{ page_number }}</a>
+          {% endif %}
+        {% endfor %}
+        {% if quiz_performance.pagination.has_next %}
+          <a class="button secondary small" href="{{ query_url(request, performance_page=quiz_performance.pagination.page + 1) }}">Next →</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

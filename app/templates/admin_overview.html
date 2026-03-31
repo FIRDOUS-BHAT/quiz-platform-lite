@@ -1,0 +1,168 @@
+{% extends "admin_shell.html" %}
+{% block title %}Admin Overview{% endblock %}
+{% block admin_content %}
+<section class="hero">
+  <div class="hero-grid">
+    <div>
+      <span class="eyebrow">📊 Overview</span>
+      <h1>Run the platform from a cleaner control room.</h1>
+      <p class="hero-lead">The admin area now separates quiz publishing, student management, and attempt monitoring into dedicated views so operational work does not collapse into one overloaded screen.</p>
+      <div class="toolbar-actions" style="margin-top: 24px;">
+        <a class="button" href="/app/admin/quizzes">📝 Manage Quizzes</a>
+        <a class="button secondary" href="/app/admin/students">👥 Review Students</a>
+        <a class="button secondary" href="/app/admin/attempts">📋 Monitor Attempts</a>
+      </div>
+    </div>
+    <div class="hero-side">
+      <div class="hero-panel">
+        <div class="muted-strong">💡 Admin design direction</div>
+        <ul>
+          <li>Overview stays summary-first.</li>
+          <li>Quiz catalog and analytics live together on their own page.</li>
+          <li>Student and attempt records are isolated so filters stay manageable.</li>
+        </ul>
+      </div>
+      <div class="hero-panel">
+        <div class="muted-strong">📈 Current system scale</div>
+        <div class="detail-grid" style="margin-top: 12px;">
+          <div class="detail-tile">
+            <div class="meta">Quizzes</div>
+            <strong>{{ summary.total_quizzes }}</strong>
+          </div>
+          <div class="detail-tile">
+            <div class="meta">Students</div>
+            <strong>{{ summary.total_students }}</strong>
+          </div>
+          <div class="detail-tile">
+            <div class="meta">Attempts</div>
+            <strong>{{ summary.total_attempts }}</strong>
+          </div>
+          <div class="detail-tile">
+            <div class="meta">Scored</div>
+            <strong>{{ summary.scored_attempts }}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="metrics">
+  <div class="metric">
+    <div class="meta">📝 Total Quizzes</div>
+    <div class="value">{{ summary.total_quizzes }}</div>
+  </div>
+  <div class="metric">
+    <div class="meta">👥 Registered Students</div>
+    <div class="value">{{ summary.total_students }}</div>
+  </div>
+  <div class="metric">
+    <div class="meta">📋 Total Attempts</div>
+    <div class="value">{{ summary.total_attempts }}</div>
+  </div>
+  <div class="metric">
+    <div class="meta">✅ Scored Attempts</div>
+    <div class="value">{{ summary.scored_attempts }}</div>
+  </div>
+</section>
+
+<div class="grid">
+  <section class="list-card">
+    <div class="list-head">
+      <div>
+        <h2>📄 Recent Quizzes</h2>
+        <p class="meta">Newest quiz entries across draft, published, and archived states.</p>
+      </div>
+      <a class="button secondary small" href="/app/admin/quizzes">Open quizzes →</a>
+    </div>
+    <div class="list-stack">
+      {% for quiz in recent_quizzes.items %}
+        <div class="list-item">
+          <strong>{{ quiz.title }}</strong>
+          <div class="meta mono">{{ quiz.quiz_id }}</div>
+          <div class="meta">Duration {{ quiz.duration_seconds|duration }} · Created {{ quiz.created_at|datetime }}</div>
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <p style="font-size: 1.5rem; margin-bottom: 8px;">📝</p>
+          No quizzes published yet.
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="list-card">
+    <div class="list-head">
+      <div>
+        <h2>👤 New Students</h2>
+        <p class="meta">Latest registrations entering the platform.</p>
+      </div>
+      <a class="button secondary small" href="/app/admin/students">Open students →</a>
+    </div>
+    <div class="list-stack">
+      {% for student in recent_students.items %}
+        <div class="list-item">
+          <strong><a class="text-link" href="/app/admin/students/{{ student.user_id }}">{{ student.full_name }}</a></strong>
+          <div class="meta">{{ student.email }}</div>
+          <div class="meta">Joined {{ student.created_at|datetime }} · Started {{ student.quizzes_started }} quizzes</div>
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <p style="font-size: 1.5rem; margin-bottom: 8px;">👥</p>
+          No student registrations yet.
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<section class="table-panel">
+  <div class="section-head">
+    <div>
+      <h2>⏱ Recent Attempts</h2>
+      <p class="meta">Latest attempt activity across the platform.</p>
+    </div>
+    <a class="button secondary small" href="/app/admin/attempts">Open attempts →</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Quiz</th>
+          <th>Status</th>
+          <th>Started</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in recent_attempts.items %}
+          <tr>
+            <td>
+              <strong><a class="text-link" href="/app/admin/students/{{ record.user_id }}">{{ record.student_name }}</a></strong>
+              <div class="meta">{{ record.student_email }}</div>
+            </td>
+            <td>
+              <strong>{{ record.quiz_title }}</strong>
+              <div class="meta mono">{{ record.quiz_id }}</div>
+            </td>
+            <td><span class="badge {{ record.attempt_status }}">{{ record.attempt_status|title }}</span></td>
+            <td>{{ record.started_at|datetime }}</td>
+            <td>
+              {% if record.score is not none and record.total is not none %}
+                {{ record.score }} / {{ record.total }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="5" class="meta">No attempts recorded yet.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

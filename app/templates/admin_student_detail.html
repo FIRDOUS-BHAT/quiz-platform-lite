@@ -1,0 +1,181 @@
+{% extends "admin_shell.html" %}
+{% block title %}Student Detail{% endblock %}
+{% block admin_content %}
+{% if error %}
+  <section class="card">
+    <div class="empty-state">
+      <p style="font-size: 2rem; margin-bottom: 12px;">⚠️</p>
+      <h2>Student detail unavailable</h2>
+      <p>{{ error }}</p>
+      <div class="nav" style="margin-top: 16px; justify-content: center;">
+        <a class="button secondary" href="/app/admin/students">← Back to students</a>
+      </div>
+    </div>
+  </section>
+{% else %}
+  <section class="hero">
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow">👤 Student Profile</span>
+        <h1>{{ student.full_name }}</h1>
+        <p class="hero-lead">{{ student.email }}</p>
+        <div class="pill-row">
+          <span class="pill">📅 Joined {{ student.created_at|datetime }}</span>
+          <span class="pill">🚀 Started {{ student.quizzes_started }}</span>
+          <span class="pill">📬 Submitted {{ student.quizzes_submitted }}</span>
+          <span class="pill">✅ Scored {{ student.quizzes_scored }}</span>
+        </div>
+        <div class="nav" style="margin-top: 24px;">
+          <a class="button secondary" href="/app/admin/students">← Back to students</a>
+        </div>
+      </div>
+      <div class="hero-side">
+        <div class="hero-panel">
+          <div class="muted-strong">📈 Performance summary</div>
+          <div class="detail-grid" style="margin-top: 12px;">
+            <div class="detail-tile">
+              <div class="meta">Average %</div>
+              <strong>{{ "%.2f"|format(student.average_percentage) if student.average_percentage is not none else "—" }}</strong>
+            </div>
+            <div class="detail-tile">
+              <div class="meta">Best %</div>
+              <strong>{{ "%.2f"|format(student.best_percentage) if student.best_percentage is not none else "—" }}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="metrics">
+    <div class="metric">
+      <div class="meta">🚀 Quizzes Started</div>
+      <div class="value">{{ student.quizzes_started }}</div>
+    </div>
+    <div class="metric">
+      <div class="meta">📬 Quizzes Submitted</div>
+      <div class="value">{{ student.quizzes_submitted }}</div>
+    </div>
+    <div class="metric">
+      <div class="meta">✅ Quizzes Scored</div>
+      <div class="value">{{ student.quizzes_scored }}</div>
+    </div>
+    <div class="metric">
+      <div class="meta">📋 Attempt History</div>
+      <div class="value">{{ student_attempts.pagination.total_items }}</div>
+    </div>
+  </section>
+
+  <section class="table-panel">
+    <div class="section-head">
+      <div>
+        <h2>⏱ Attempt History</h2>
+        <p class="meta">Filter the selected student's attempts by quiz, status, or search text.</p>
+      </div>
+      <span class="badge submitted">{{ student_attempts.pagination.total_items }} records</span>
+    </div>
+    <form method="get" action="/app/admin/students/{{ student.user_id }}" class="table-toolbar">
+      <div class="filters-grid">
+        <div class="field-group">
+          <label for="attempt_q">Search attempts</label>
+          <input id="attempt_q" type="text" name="attempt_q" value="{{ attempt_filters.query or '' }}" placeholder="Quiz title or ID">
+        </div>
+        <div class="field-group">
+          <label for="attempt_quiz_id">Quiz</label>
+          <select id="attempt_quiz_id" name="attempt_quiz_id">
+            <option value="">All quizzes</option>
+            {% for quiz in quizzes %}
+              <option value="{{ quiz.quiz_id }}" {% if attempt_filters.quiz_id == quiz.quiz_id %}selected{% endif %}>{{ quiz.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="attempt_status">Status</label>
+          <select id="attempt_status" name="attempt_status">
+            <option value="">All statuses</option>
+            {% for status_option in attempt_status_options %}
+              <option value="{{ status_option }}" {% if attempt_filters.status == status_option %}selected{% endif %}>{{ status_option|title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="attempt_page_size">Rows per page</label>
+          <select id="attempt_page_size" name="attempt_page_size">
+            {% for page_size in [10, 25, 50, 100] %}
+              <option value="{{ page_size }}" {% if attempt_filters.page_size == page_size %}selected{% endif %}>{{ page_size }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field-group">
+          <label>&nbsp;</label>
+          <div class="toolbar-actions">
+            <button type="submit" class="small">Apply</button>
+            <a class="button secondary small" href="{{ query_url(request, attempt_q=None, attempt_quiz_id=None, attempt_status=None, attempt_page=1) }}">Reset</a>
+          </div>
+        </div>
+      </div>
+    </form>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Quiz</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Submitted</th>
+            <th>Score</th>
+            <th>Percentage</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in student_attempts.items %}
+            <tr>
+              <td>
+                <strong>{{ record.quiz_title }}</strong>
+                <div class="meta mono">{{ record.quiz_id }}</div>
+              </td>
+              <td><span class="badge {{ record.attempt_status }}">{{ record.attempt_status|title }}</span></td>
+              <td>{{ record.started_at|datetime }}</td>
+              <td>{{ record.submitted_at|datetime }}</td>
+              <td>
+                {% if record.score is not none and record.total is not none %}
+                  {{ record.score }} / {{ record.total }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ "%.2f"|format(record.percentage) if record.percentage is not none else "—" }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6" class="meta">No attempts found for the selected filters.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <div class="pagination-summary">
+        Showing {{ student_attempts.pagination.start_item }}-{{ student_attempts.pagination.end_item }} of {{ student_attempts.pagination.total_items }}
+      </div>
+      {% if student_attempts.pagination.total_pages > 1 %}
+        <div class="pagination-group">
+          {% if student_attempts.pagination.has_prev %}
+            <a class="button secondary small" href="{{ query_url(request, attempt_page=student_attempts.pagination.page - 1) }}">← Previous</a>
+          {% endif %}
+          {% for page_number in attempt_page_numbers %}
+            {% if page_number == student_attempts.pagination.page %}
+              <span class="badge submitted">{{ page_number }}</span>
+            {% else %}
+              <a class="button secondary small" href="{{ query_url(request, attempt_page=page_number) }}">{{ page_number }}</a>
+            {% endif %}
+          {% endfor %}
+          {% if student_attempts.pagination.has_next %}
+            <a class="button secondary small" href="{{ query_url(request, attempt_page=student_attempts.pagination.page + 1) }}">Next →</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </section>
+{% endif %}
+{% endblock %}

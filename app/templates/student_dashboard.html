@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard{% endblock %}
+{% block content %}
+{% set ns = namespace(active=0, completed=0, expired=0, ready=0) %}
+{% for quiz in quizzes %}
+  {% if quiz.attempt_status == "active" %}
+    {% set ns.active = ns.active + 1 %}
+  {% elif quiz.attempt_status in ["submitted", "scored"] %}
+    {% set ns.completed = ns.completed + 1 %}
+  {% elif quiz.attempt_status == "expired" %}
+    {% set ns.expired = ns.expired + 1 %}
+  {% else %}
+    {% set ns.ready = ns.ready + 1 %}
+  {% endif %}
+{% endfor %}
+<section class="hero">
+  <span class="eyebrow">📚 Student Dashboard</span>
+  <h1>Choose a test series</h1>
+  <p class="hero-lead">Start a new test, resume an active attempt, or open a completed result.</p>
+  <div class="pill-row" style="margin-top: 20px;">
+    <span class="pill">🟢 Ready {{ ns.ready }}</span>
+    <span class="pill">⚡ Active {{ ns.active }}</span>
+    <span class="pill">✅ Completed {{ ns.completed }}</span>
+    <span class="pill">⏰ Expired {{ ns.expired }}</span>
+  </div>
+</section>
+
+<section class="metrics">
+  <div class="metric">
+    <div class="meta">Available Tests</div>
+    <div class="value">{{ quizzes|length }}</div>
+  </div>
+  <div class="metric">
+    <div class="meta">Ready</div>
+    <div class="value">{{ ns.ready }}</div>
+  </div>
+  <div class="metric">
+    <div class="meta">In Progress</div>
+    <div class="value">{{ ns.active }}</div>
+  </div>
+  <div class="metric">
+    <div class="meta">Completed</div>
+    <div class="value">{{ ns.completed }}</div>
+  </div>
+</section>
+
+<div class="dashboard-grid">
+  {% for quiz in quizzes %}
+    <section class="quiz-card">
+      <div class="quiz-card-head">
+        <div>
+          <span class="eyebrow">Test Series</span>
+          <h2>{{ quiz.title }}</h2>
+        </div>
+        {% if quiz.attempt_status %}
+          <span class="badge {{ quiz.attempt_status }}">{{ quiz.attempt_status|title }}</span>
+        {% elif quiz.availability_status == "upcoming" %}
+          <span class="badge pending">Upcoming</span>
+        {% elif quiz.availability_status == "closed" %}
+          <span class="badge expired">Closed</span>
+        {% else %}
+          <span class="badge pending">Not Started</span>
+        {% endif %}
+      </div>
+      {% if quiz.description %}
+        <p>{{ quiz.description }}</p>
+      {% endif %}
+      <div class="detail-grid">
+        <div class="detail-tile">
+          <div class="meta">⏱ Duration</div>
+          <strong>{{ quiz.duration_seconds|duration }}</strong>
+        </div>
+        {% if quiz.attempt_status == "active" and quiz.expires_at %}
+          <div class="detail-tile">
+            <div class="meta">🔚 Ends At</div>
+            <strong>{{ quiz.expires_at|datetime }}</strong>
+          </div>
+        {% elif quiz.availability_status == "upcoming" and quiz.availability_start_at %}
+          <div class="detail-tile">
+            <div class="meta">📅 Opens</div>
+            <strong>{{ quiz.availability_start_at|datetime }}</strong>
+          </div>
+        {% elif quiz.availability_status == "closed" and quiz.availability_end_at %}
+          <div class="detail-tile">
+            <div class="meta">🔒 Closed</div>
+            <strong>{{ quiz.availability_end_at|datetime }}</strong>
+          </div>
+        {% elif quiz.attempt_status in ["submitted", "scored"] and quiz.submitted_at %}
+          <div class="detail-tile">
+            <div class="meta">📬 Submitted</div>
+            <strong>{{ quiz.submitted_at|datetime }}</strong>
+          </div>
+        {% elif quiz.attempt_status == "expired" and quiz.expires_at %}
+          <div class="detail-tile">
+            <div class="meta">⏰ Expired</div>
+            <strong>{{ quiz.expires_at|datetime }}</strong>
+          </div>
+        {% else %}
+          <div class="detail-tile">
+            <div class="meta">✨ Status</div>
+            <strong>Ready to start</strong>
+          </div>
+        {% endif %}
+      </div>
+      <div class="nav">
+        {% if quiz.attempt_status in ["submitted", "scored"] %}
+          <a class="button" href="/app/student/results/{{ quiz.quiz_id }}">View Result →</a>
+        {% elif quiz.attempt_status == "active" %}
+          <a class="button" href="/app/student/attempts/{{ quiz.attempt_id }}">Resume Attempt →</a>
+        {% elif quiz.attempt_status == "expired" %}
+          <span class="form-note">Attempt expired — no further action available.</span>
+        {% elif quiz.availability_status == "upcoming" %}
+          <span class="form-note">This test will open at {{ quiz.availability_start_at|datetime if quiz.availability_start_at else "the scheduled time" }}.</span>
+        {% elif quiz.availability_status == "closed" %}
+          <span class="form-note">The test window has closed.</span>
+        {% else %}
+          <form action="/app/student/quizzes/{{ quiz.quiz_id }}/start" method="post" class="start-quiz-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+            <button type="submit">Start Test →</button>
+          </form>
+        {% endif %}
+      </div>
+    </section>
+  {% else %}
+    <section class="card">
+      <div class="empty-state">
+        <p style="font-size: 2rem; margin-bottom: 12px;">📝</p>
+        <h3>No tests available right now</h3>
+        <p class="meta">Check back later after a new test series is published by the admin.</p>
+      </div>
+    </section>
+  {% endfor %}
+</div>
+
+<script>
+(function(){
+  /* Confirm before starting a test */
+  document.querySelectorAll('.start-quiz-form').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var title = form.closest('.quiz-card').querySelector('h2').textContent.trim();
+      showConfirmModal(
+        'Start Test?',
+        'You are about to start "' + title + '". The timer will begin immediately and cannot be paused. Make sure you are ready.',
+        function() { form.submit(); }
+      );
+    });
+  });
+}());
+</script>
+{% endblock %}

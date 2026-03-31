@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Result{% endblock %}
+{% block content %}
+{% if result.status == "processing" %}
+  <section class="hero">
+    <span class="eyebrow">⏳ Scoring In Progress</span>
+    <h1>Result for {{ quiz_id }}</h1>
+    <p class="hero-lead">Your submission is still being scored by the worker. This page will automatically refresh.</p>
+    <div class="pill-row">
+      <span class="pill">🔄 Queued for evaluation</span>
+      <span class="pill">⏱ Result page will update</span>
+    </div>
+    <div class="progress-track" style="margin-top: 24px; max-width: 400px;">
+      <div class="progress-bar" style="--progress: 60%; animation: loading-pulse 2s ease infinite;"></div>
+    </div>
+    <div class="nav" style="margin-top: 24px;">
+      <a class="button secondary" href="/app/student">← Back to dashboard</a>
+    </div>
+  </section>
+  <script>
+    /* Auto-refresh every 5 seconds */
+    setTimeout(function(){ window.location.reload(); }, 5000);
+  </script>
+  <style>
+    @keyframes loading-pulse {
+      0%, 100% { --progress: 30%; opacity: 0.6; }
+      50% { --progress: 80%; opacity: 1; }
+    }
+  </style>
+{% else %}
+  <div class="result-layout">
+    <section class="result-hero card">
+      <span class="eyebrow">🏆 Result Published</span>
+      <h1>{{ quiz_id }}</h1>
+      <p class="hero-lead">Your attempt has been scored and written back to the portal.</p>
+      <div class="detail-grid">
+        <div class="detail-tile">
+          <div class="meta">📊 Score</div>
+          <strong>{{ result.score }} / {{ result.total }}</strong>
+        </div>
+        <div class="detail-tile">
+          <div class="meta">📈 Percentage</div>
+          <strong>{{ "%.2f"|format(result.percentage) }}%</strong>
+        </div>
+        <div class="detail-tile">
+          <div class="meta">🕐 Evaluated</div>
+          <strong>{{ result.evaluated_at|datetime }}</strong>
+        </div>
+      </div>
+      {% if result.percentage >= 80 %}
+        <div class="message success" style="margin-top: 20px; margin-bottom: 0;">
+          <span>🎉 Outstanding performance! You scored above 80%.</span>
+        </div>
+      {% elif result.percentage >= 50 %}
+        <div class="message info" style="margin-top: 20px; margin-bottom: 0;">
+          <span>👍 Good job! Keep practicing to improve further.</span>
+        </div>
+      {% else %}
+        <div class="message error" style="margin-top: 20px; margin-bottom: 0;">
+          <span>📚 Keep studying! Review the material and try again.</span>
+        </div>
+      {% endif %}
+      <div class="nav" style="margin-top: 20px;">
+        <a class="button secondary" href="/app/student">← Back to dashboard</a>
+      </div>
+    </section>
+    <aside class="card">
+      <h3>📊 Performance Snapshot</h3>
+      <div class="score-ring" id="score-ring" style="--score: 0; margin: 20px auto;">
+        <strong id="score-value">0%</strong>
+      </div>
+      <p class="meta" style="text-align: center; margin-top: 16px;">Use the student dashboard to open another available test series or revisit completed quizzes.</p>
+    </aside>
+  </div>
+
+  <script>
+    /* Animated score ring reveal */
+    (function() {
+      var target = {{ result.percentage }};
+      var ring = document.getElementById("score-ring");
+      var label = document.getElementById("score-value");
+      var current = 0;
+      var step = target / 60;
+      function animate() {
+        current += step;
+        if (current >= target) {
+          current = target;
+          ring.style.setProperty("--score", current);
+          label.textContent = Math.round(current) + "%";
+          return;
+        }
+        ring.style.setProperty("--score", current);
+        label.textContent = Math.round(current) + "%";
+        requestAnimationFrame(animate);
+      }
+      setTimeout(animate, 500);
+
+      /* Confetti for high scores */
+      if (target >= 80) {
+        var canvas = document.createElement("canvas");
+        canvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;";
+        document.body.appendChild(canvas);
+        var ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        var particles = [];
+        var colors = ["#14b8a6","#8b5cf6","#f59e0b","#ef4444","#3b82f6","#22c55e"];
+        for (var i = 0; i < 120; i++) {
+          particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height - canvas.height,
+            w: Math.random() * 8 + 4,
+            h: Math.random() * 4 + 2,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            vy: Math.random() * 3 + 2,
+            vx: (Math.random() - 0.5) * 2,
+            rot: Math.random() * 360,
+            vr: (Math.random() - 0.5) * 8
+          });
+        }
+        var frames = 0;
+        function drawConfetti() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          particles.forEach(function(p) {
+            p.y += p.vy;
+            p.x += p.vx;
+            p.rot += p.vr;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot * Math.PI / 180);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+            ctx.restore();
+          });
+          frames++;
+          if (frames < 180) requestAnimationFrame(drawConfetti);
+          else { canvas.remove(); }
+        }
+        setTimeout(drawConfetti, 800);
+      }
+    })();
+  </script>
+{% endif %}
+{% endblock %}

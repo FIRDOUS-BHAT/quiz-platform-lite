@@ -1,0 +1,47 @@
+{
+    "title": "System Design Basics",
+    "description": "Test your knowledge of distributed systems.",
+    "duration_seconds": 600,
+    "questions": [
+        {
+            "id": "q1",
+            "text": "Which property of CAP theorem is sacrificed for high availability in partition-tolerant systems?",
+            "type": "single_choice",
+            "options": [
+                {
+                    "id": "a",
+                    "text": "Consistency"
+                },
+                {
+                    "id": "b",
+                    "text": "Availability"
+                },
+                {
+                    "id": "c",
+                    "text": "Partition Tolerance"
+                }
+            ],
+            "correct_option_id": "a"
+        },
+        {
+            "id": "q2",
+            "text": "What is the primary benefit of using Redis?",
+            "type": "single_choice",
+            "options": [
+                {
+                    "id": "a",
+                    "text": "ACID compliance"
+                },
+                {
+                    "id": "b",
+                    "text": "Low latency data access"
+                },
+                {
+                    "id": "c",
+                    "text": "Complex relational queries"
+                }
+            ],
+            "correct_option_id": "b"
+        }
+    ]
+}

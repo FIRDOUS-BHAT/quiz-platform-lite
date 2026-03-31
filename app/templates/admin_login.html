@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Admin Sign In{% endblock %}
+{% block content %}
+<div class="auth-layout">
+  <section class="auth-aside">
+    <span class="eyebrow">🛡 Authorized Staff</span>
+    <h1>Admin sign in</h1>
+    <p class="hero-lead">Use your admin account to upload test series, review student activity, and monitor results.</p>
+    <div class="detail-grid" style="margin-top: 24px;">
+      <div class="detail-tile">
+        <div class="meta">📤 Uploads</div>
+        <strong>Import Excel test series</strong>
+      </div>
+      <div class="detail-tile">
+        <div class="meta">👥 Students</div>
+        <strong>Track registration & participation</strong>
+      </div>
+      <div class="detail-tile">
+        <div class="meta">📊 Reports</div>
+        <strong>Review performance dashboards</strong>
+      </div>
+    </div>
+    <div class="pill-row" style="margin-top: 24px;">
+      <span class="pill">Full control</span>
+      <span class="pill">Real-time monitoring</span>
+    </div>
+  </section>
+
+  <section class="auth-panel">
+    <div>
+      <span class="eyebrow">Admin Access</span>
+      <h2>Admin Sign In</h2>
+      <p class="meta">Authorized staff only.</p>
+    </div>
+    <form method="post" action="/app/admin/login" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" placeholder="admin@example.com" required autocomplete="email">
+      </div>
+      <div>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit">Sign In →</button>
+      <div class="form-note">
+        Student account? <a href="/app/login" class="text-link">Go to student sign in</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

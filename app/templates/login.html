@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Sign In{% endblock %}
+{% block content %}
+<div class="auth-layout">
+  <section class="auth-aside">
+    <span class="eyebrow">✦ Student Portal</span>
+    <h1>Sign in to continue your test series.</h1>
+    <p class="hero-lead">Use your student account to start a test, resume an active attempt, or open your results.</p>
+    <div class="detail-grid" style="margin-top: 24px;">
+      <div class="detail-tile">
+        <div class="meta">🚀 Start</div>
+        <strong>Begin available tests</strong>
+      </div>
+      <div class="detail-tile">
+        <div class="meta">⏱ Resume</div>
+        <strong>Continue active attempts</strong>
+      </div>
+      <div class="detail-tile">
+        <div class="meta">📊 Results</div>
+        <strong>View scored submissions</strong>
+      </div>
+    </div>
+    <div class="pill-row" style="margin-top: 24px;">
+      <span class="pill">Timed assessments</span>
+      <span class="pill">Auto-save enabled</span>
+      <span class="pill">Instant scoring</span>
+    </div>
+  </section>
+
+  <section class="auth-panel">
+    <div>
+      <span class="eyebrow">Welcome Back</span>
+      <h2>Sign In</h2>
+      <p class="meta">Enter your email and password to continue.</p>
+    </div>
+    <form method="post" action="/app/login" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit">Sign In →</button>
+      <div class="form-note">
+        New student? <a href="/app/register" class="text-link">Register your account here</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}
