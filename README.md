@@ -50,6 +50,7 @@ cp .env.example .env
 ```env
 CSRF_SECRET_KEY=replace-me
 BOOTSTRAP_ADMIN_PASSWORD=replace-me
+APP_TIMEZONE=Asia/Kolkata
 SECURE_COOKIES=true
 ENVIRONMENT=production
 ```
@@ -58,6 +59,20 @@ ENVIRONMENT=production
 
 ```bash
 docker compose up -d --build
+```
+
+### Operational commands
+
+Use these to restart, rebuild, or inspect the running services after you change code or config:
+
+```bash
+docker compose restart app     # restart only the FastAPI container
+docker compose restart        # restart every service in the stack
+docker compose stop app        # stop just the app without destroying volume data
+docker compose stop           # stop the whole stack
+docker compose down           # stop and remove containers (add -v to drop named volumes)
+docker compose up -d --build  # rebuild the image before launching the app
+docker compose logs -f app    # stream app logs to check readiness
 ```
 
 4. Open the app.

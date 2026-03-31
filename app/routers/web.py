@@ -31,7 +31,7 @@ from app.services.excel import parse_quiz_workbook
 from app.services.scoring import calculate_score
 from app.utils.csrf import get_csrf_token
 from app.utils.rate_limit import rate_limit_login, rate_limit_register
-from app.utils.time import utc_now_epoch
+from app.utils.time import coerce_epoch, local_timezone, local_timezone_name, utc_now_epoch
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
@@ -54,7 +54,8 @@ def _format_epoch(value: int | None) -> str:
         instant = datetime.fromtimestamp(int(value), tz=timezone.utc)
     except (TypeError, ValueError, OSError):
         return str(value)
-    return instant.strftime("%b %d, %Y · %H:%M UTC")
+    local = instant.astimezone(local_timezone())
+    return local.strftime("%b %d, %Y · %H:%M %Z")
 
 
 def _format_duration(value: int | None) -> str:
@@ -84,7 +85,8 @@ def _format_datetime_local(value: int | None) -> str:
         instant = datetime.fromtimestamp(int(value), tz=timezone.utc)
     except (TypeError, ValueError, OSError):
         return ""
-    return instant.strftime("%Y-%m-%dT%H:%M")
+    local = instant.astimezone(local_timezone())
+    return local.strftime("%Y-%m-%dT%H:%M")
 
 
 def _query_url(request: Request, **updates: object) -> str:
@@ -120,12 +122,9 @@ def _parse_datetime_local(value: str | None) -> int | None:
     if normalized is None:
         return None
     try:
-        parsed = datetime.fromisoformat(normalized)
+        return coerce_epoch(normalized, field_name="datetime")
     except ValueError as exc:
         raise ValueError("Use a valid date and time") from exc
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return int(parsed.timestamp())
 
 
 def _validated_lifecycle_status(value: str | None) -> QuizLifecycleStatus:
@@ -198,6 +197,7 @@ templates.env.filters["duration"] = _format_duration
 templates.env.filters["datetime_local"] = _format_datetime_local
 templates.env.globals["query_url"] = _query_url
 templates.env.globals["csrf_token"] = get_csrf_token
+templates.env.globals["local_timezone_label"] = local_timezone_name
 
 
 def _render(
@@ -698,6 +698,24 @@ async def admin_update_quiz_settings(
         return _redirect(redirect_url, f"Quiz update failed: {exc}", "error")
 
     return _redirect(redirect_url, f"Updated settings for '{updated['title']}'", "success")
+
+
+@router.post("/app/admin/quizzes/{quiz_id}/delete")
+async def admin_delete_quiz(
+    quiz_id: str,
+    next_url: str | None = Form(None),
+    current_user: UserSession = Depends(get_current_admin),
+    store=Depends(get_store),
+) -> RedirectResponse:
+    del current_user
+    redirect_url = _safe_admin_quiz_return_url(next_url)
+    try:
+        deleted = await store.delete_quiz(quiz_id)
+    except LookupError as exc:
+        return _redirect(redirect_url, str(exc), "error")
+    except Exception as exc:
+        return _redirect(redirect_url, f"Failed to delete quiz: {exc}", "error")
+    return _redirect(redirect_url, f"Deleted quiz '{deleted['title']}'", "success")
 
 
 @router.get("/app/student", response_class=HTMLResponse)

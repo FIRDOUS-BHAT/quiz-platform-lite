@@ -2,7 +2,7 @@ import uuid
 from math import ceil
 from typing import Any
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
@@ -27,7 +27,7 @@ from app.schemas.submission import QuizResultResponse
 from app.services.auth import hash_password, hash_session_token, normalize_email
 from app.services.db import DatabaseSessionFactory
 from app.services.excel import slugify
-from app.utils.time import utc_now_epoch
+from app.utils.time import epoch_to_local_iso, local_timezone_name, utc_now_epoch
 
 
 class PlatformStore:
@@ -130,6 +130,12 @@ class PlatformStore:
             payload.availability_start_at,
             payload.availability_end_at,
         )
+        payload = payload.model_copy(
+            update={
+                "availability_start_at": availability_start_at,
+                "availability_end_at": availability_end_at,
+            }
+        )
         created_at = utc_now_epoch()
 
         async with self.session_factory.begin() as session:
@@ -145,7 +151,7 @@ class PlatformStore:
                 availability_end_at=availability_end_at,
                 created_by=created_by,
                 source_filename=source_filename,
-                raw_data=payload.model_dump(mode="json"),
+                raw_data=self._serialize_quiz_raw_data(payload, created_at=created_at),
                 created_at=created_at,
             )
             session.add(entity)
@@ -178,12 +184,18 @@ class PlatformStore:
             raw_payload = dict(quiz.raw_data or {})
             raw_payload["availability_start_at"] = validated_start
             raw_payload["availability_end_at"] = validated_end
+            quiz_payload = QuizDefinition.model_validate(raw_payload).model_copy(
+                update={
+                    "availability_start_at": validated_start,
+                    "availability_end_at": validated_end,
+                }
+            )
 
             quiz.lifecycle_status = lifecycle_status
             quiz.is_published = lifecycle_status == "published"
             quiz.availability_start_at = validated_start
             quiz.availability_end_at = validated_end
-            quiz.raw_data = raw_payload
+            quiz.raw_data = self._serialize_quiz_raw_data(quiz_payload, created_at=quiz.created_at)
 
             return {
                 "quiz_id": quiz.quiz_id,
@@ -191,8 +203,18 @@ class PlatformStore:
                 "lifecycle_status": quiz.lifecycle_status,
                 "availability_start_at": quiz.availability_start_at,
                 "availability_end_at": quiz.availability_end_at,
-                "raw_data": QuizDefinition.model_validate(raw_payload),
+                "raw_data": quiz_payload,
             }
+
+    async def delete_quiz(self, quiz_id: str) -> dict[str, Any]:
+        async with self.session_factory.begin() as session:
+            quiz = await session.get(Quiz, quiz_id)
+            if quiz is None:
+                raise LookupError("Quiz not found")
+            title = quiz.title
+            await session.execute(delete(Result).where(Result.quiz_id == quiz_id))
+            await session.delete(quiz)
+            return {"quiz_id": quiz.quiz_id, "title": title}
 
     async def list_quiz_catalog_page(
         self,
@@ -932,6 +954,16 @@ class PlatformStore:
             int(availability_start_at) if availability_start_at is not None else None,
             int(availability_end_at) if availability_end_at is not None else None,
         )
+
+    def _serialize_quiz_raw_data(self, quiz: QuizDefinition, *, created_at: int | None) -> dict[str, Any]:
+        raw_payload = quiz.model_dump(mode="json")
+        raw_payload["local_time_context"] = {
+            "timezone": local_timezone_name(),
+            "created_at": epoch_to_local_iso(created_at),
+            "availability_start_at": epoch_to_local_iso(quiz.availability_start_at),
+            "availability_end_at": epoch_to_local_iso(quiz.availability_end_at),
+        }
+        return raw_payload
 
     def _quiz_availability_status(self, row: dict[str, Any], now: int) -> str:
         lifecycle_status = str(row.get("lifecycle_status") or "published")

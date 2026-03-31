@@ -1,7 +1,9 @@
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from typing_extensions import Annotated
+
+from app.utils.time import coerce_epoch
 
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=512)]
@@ -62,6 +64,23 @@ class QuizDefinition(BaseModel):
     availability_start_at: Optional[int] = Field(default=None, gt=0)
     availability_end_at: Optional[int] = Field(default=None, gt=0)
     questions: list[QuizQuestion] = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_window_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        normalized = dict(data)
+        for field_name in ("availability_start_at", "availability_end_at"):
+            if field_name not in normalized:
+                continue
+            value = normalized[field_name]
+            if value in (None, ""):
+                normalized[field_name] = None
+                continue
+            normalized[field_name] = coerce_epoch(value, field_name=field_name)
+        return normalized
 
     @model_validator(mode="after")
     def validate_window(self) -> "QuizDefinition":

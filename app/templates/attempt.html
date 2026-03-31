@@ -26,7 +26,7 @@
   <div class="attempt-shell">
     <div class="attempt-main">
       <section class="hero attempt-hero">
-        <span class="eyebrow">⚡ Active Attempt</span>
+        <span class="eyebrow">Active Attempt</span>
         <div class="hero-grid">
           <div>
             <h1>{{ attempt_view.quiz.title }}</h1>
@@ -34,16 +34,14 @@
               <p class="hero-lead">{{ attempt_view.quiz.description }}</p>
             {% endif %}
             <div class="attempt-meta">
-              <div class="attempt-chip">📄 Page {{ attempt_view.page }} of {{ attempt_view.total_pages }}</div>
-              <div class="attempt-chip">🔢 Questions {{ current_page_start }}-{{ current_page_end }} of {{ attempt_view.total_questions }}</div>
-              <div class="attempt-chip">⏱ {{ attempt_view.quiz.duration_seconds|duration }}</div>
+              <div class="attempt-chip">Duration: {{ attempt_view.quiz.duration_seconds|duration }}</div>
               <div class="attempt-chip mono">🔑 {{ attempt_view.attempt_id[:8] }}</div>
-              <div class="attempt-chip timer" id="timer-chip" data-seconds="{{ attempt_view.remaining_seconds }}">⏳ <span id="timer-text"></span></div>
+              <div class="attempt-chip timer" id="timer-chip" data-seconds="{{ attempt_view.remaining_seconds }}"><span id="timer-text"></span></div>
             </div>
           </div>
           <div class="hero-side">
             <div class="hero-panel">
-              <div class="muted-strong">⌨️ Keyboard shortcuts</div>
+              <div class="muted-strong">Keyboard shortcuts</div>
               <ul>
                 <li><code>A</code> <code>B</code> <code>C</code> <code>D</code> — select option</li>
                 <li><code>←</code> / <code>→</code> — previous / next page</li>
@@ -99,7 +97,7 @@
 
     <aside class="attempt-sidebar">
       <section class="card">
-        <h3>📋 Attempt Summary</h3>
+        <h3>Attempt Summary</h3>
         <div class="summary-list">
           <div class="summary-item">
             <div>
@@ -140,7 +138,7 @@
       <section class="card">
         <div class="section-head">
           <div>
-            <h3>🗺 Question Map</h3>
+            <h3>Question Map</h3>
             <p class="meta">Jump to any part of the paper.</p>
           </div>
           <span class="badge">{{ attempt_view.total_questions }} total</span>
@@ -193,16 +191,16 @@
         output.textContent = minutes + ":" + seconds;
         /* Color transitions: green > yellow > red */
         if (remaining <= 60) {
-          timerChip.style.background = "rgba(239, 68, 68, 0.2)";
-          timerChip.style.color = "#f87171";
-          timerChip.style.borderColor = "rgba(239, 68, 68, 0.4)";
+          timerChip.style.background = "rgba(239, 68, 68, 0.15)";
+          timerChip.style.color = "var(--error)";
+          timerChip.style.borderColor = "var(--error)";
           if (remaining <= 30) {
             timerChip.style.animation = "pulse 0.6s ease infinite";
           }
         } else if (remaining <= 300) {
-          timerChip.style.background = "rgba(234, 179, 8, 0.2)";
-          timerChip.style.color = "#facc15";
-          timerChip.style.borderColor = "rgba(234, 179, 8, 0.4)";
+          timerChip.style.background = "rgba(245, 158, 11, 0.15)";
+          timerChip.style.color = "var(--warning)";
+          timerChip.style.borderColor = "var(--warning)";
         }
       }
 

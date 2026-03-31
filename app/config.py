@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     admin_max_page_size: int = Field(default=100, ge=10, le=500)
     attempt_default_page_size: int = Field(default=10, ge=1, le=50)
     attempt_max_page_size: int = Field(default=20, ge=1, le=100)
+    app_timezone: str = "Asia/Kolkata"
 
     # Security
     csrf_secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(32))

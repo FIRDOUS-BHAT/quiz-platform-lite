@@ -48,8 +48,8 @@
         <label for="file">Excel Workbook</label>
         <input id="file" name="file" type="file" accept=".xlsx,.xlsm" required>
       </div>
-      <div class="detail-grid">
-        <div>
+      <div class="filters-grid">
+        <div class="field-group">
           <label for="lifecycle_status">Initial status</label>
           <select id="lifecycle_status" name="lifecycle_status">
             {% for option in lifecycle_status_options %}
@@ -57,18 +57,18 @@
             {% endfor %}
           </select>
         </div>
-        <div>
-          <label for="availability_start_at">Opens at (UTC)</label>
+        <div class="field-group">
+          <label for="availability_start_at">Opens at ({{ local_timezone_label() }})</label>
           <input id="availability_start_at" name="availability_start_at" type="datetime-local">
         </div>
-        <div>
-          <label for="availability_end_at">Closes at (UTC)</label>
+        <div class="field-group">
+          <label for="availability_end_at">Closes at ({{ local_timezone_label() }})</label>
           <input id="availability_end_at" name="availability_end_at" type="datetime-local">
         </div>
       </div>
       <button type="submit">Import Workbook →</button>
+      <div class="form-note">Leave the schedule blank to keep the quiz continuously available whenever its lifecycle status is <strong>Published</strong>. Workbook and JSON/text schedule values without an explicit timezone are interpreted as {{ local_timezone_label() }}.</div>
     </form>
-    <div class="form-note">Leave the schedule blank to keep the quiz continuously available whenever its lifecycle status is <strong>Published</strong>.</div>
   </section>
 
   <section class="list-card">
@@ -189,17 +189,22 @@
                   </select>
                 </div>
                 <div class="field-group">
-                  <label for="start_{{ loop.index }}">Opens at (UTC)</label>
+                  <label for="start_{{ loop.index }}">Opens at ({{ local_timezone_label() }})</label>
                   <input id="start_{{ loop.index }}" name="availability_start_at" type="datetime-local" value="{{ quiz.availability_start_at|datetime_local }}">
                 </div>
                 <div class="field-group">
-                  <label for="end_{{ loop.index }}">Closes at (UTC)</label>
+                  <label for="end_{{ loop.index }}">Closes at ({{ local_timezone_label() }})</label>
                   <input id="end_{{ loop.index }}" name="availability_end_at" type="datetime-local" value="{{ quiz.availability_end_at|datetime_local }}">
                 </div>
                 <button type="submit" class="small">Save</button>
-              </form>
-            </td>
-          </tr>
+                </form>
+                <form method="post" action="/app/admin/quizzes/{{ quiz.quiz_id }}/delete" class="stack" onsubmit="return confirm('Delete this quiz? This cannot be undone.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                  <input type="hidden" name="next_url" value="{{ query_url(request) }}">
+                  <button type="submit" class="button small ghost">Delete</button>
+                </form>
+              </td>
+            </tr>
         {% else %}
           <tr>
             <td colspan="6" class="meta">No quizzes match the current filters.</td>

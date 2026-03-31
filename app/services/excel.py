@@ -1,10 +1,10 @@
-from datetime import date, datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
 from openpyxl import load_workbook
 
 from app.schemas.quiz import QuizDefinition
+from app.utils.time import coerce_epoch
 
 
 def slugify(value: str) -> str:
@@ -72,32 +72,9 @@ def _read_metadata(sheet, filename: str | None) -> dict[str, object]:
         metadata["duration_seconds"] = int(metadata["duration_seconds"])
     for field_name in ("availability_start_at", "availability_end_at"):
         if field_name in metadata:
-            metadata[field_name] = _coerce_epoch(metadata[field_name], field_name)
+            metadata[field_name] = coerce_epoch(metadata[field_name], field_name=field_name)
 
     return metadata
-
-
-def _coerce_epoch(value: object, field_name: str) -> int:
-    if isinstance(value, datetime):
-        return int(value.replace(tzinfo=value.tzinfo or timezone.utc).timestamp())
-    if isinstance(value, date):
-        return int(datetime(value.year, value.month, value.day, tzinfo=timezone.utc).timestamp())
-    if isinstance(value, (int, float)):
-        return int(value)
-    if isinstance(value, str):
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError(f"{field_name} must not be empty")
-        if normalized.isdigit():
-            return int(normalized)
-        try:
-            if normalized.endswith("Z"):
-                normalized = normalized[:-1] + "+00:00"
-            parsed = datetime.fromisoformat(normalized)
-        except ValueError as exc:
-            raise ValueError(f"{field_name} must be an epoch or ISO datetime") from exc
-        return int(parsed.replace(tzinfo=parsed.tzinfo or timezone.utc).timestamp())
-    raise ValueError(f"{field_name} must be an epoch or ISO datetime")
 
 
 def _read_questions(sheet) -> list[dict[str, object]]:
