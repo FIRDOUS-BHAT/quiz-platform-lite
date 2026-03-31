@@ -175,6 +175,34 @@
       -webkit-backdrop-filter: blur(20px);
     }
 
+    body[class~="attempt-page"] .shell {
+      width: min(1400px, calc(100% - 32px));
+    }
+
+    body[class~="attempt-page"] .topbar {
+      padding: 0.85rem 1rem;
+      margin-bottom: 1.15rem;
+    }
+
+    body[class~="attempt-page"] .brand-block {
+      gap: 0.25rem;
+    }
+
+    body[class~="attempt-page"] .brand-block .meta {
+      display: none;
+    }
+
+    body[class~="attempt-page"] .brand {
+      font-size: 1.3rem;
+    }
+
+    body[class~="attempt-page"] .topbar .button,
+    body[class~="attempt-page"] .topbar button,
+    body[class~="attempt-page"] .topbar .badge {
+      min-height: 40px;
+      padding: 0.65rem 1rem;
+    }
+
     .brand-block {
       display: grid;
       gap: 0.35rem;
@@ -1169,14 +1197,14 @@
 
     .attempt-shell {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 310px;
-      gap: 1.2rem;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 1.35rem;
       align-items: start;
     }
 
     .attempt-main {
       display: grid;
-      gap: 1.2rem;
+      gap: 1.35rem;
     }
 
     .attempt-sidebar {
@@ -1187,7 +1215,18 @@
     }
 
     .attempt-hero {
-      padding: 2.4rem;
+      padding: 2.1rem;
+    }
+
+    .attempt-hero .hero-grid {
+      align-items: end;
+    }
+
+    .attempt-title {
+      max-width: 7.5ch;
+      margin-bottom: 0.75rem;
+      font-size: clamp(3rem, 6vw, 4.8rem);
+      line-height: 0.88;
     }
 
     .attempt-meta {
@@ -1218,8 +1257,21 @@
       display: flex;
       justify-content: space-between;
       gap: 1rem;
-      align-items: baseline;
+      align-items: flex-start;
       margin-bottom: 1rem;
+    }
+
+    .question-head > div:first-child {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .question-ref {
+      display: grid;
+      gap: 0.45rem;
+      justify-items: end;
+      text-align: right;
+      flex: 0 0 auto;
     }
 
     .question-index {
@@ -1235,6 +1287,7 @@
       line-height: 1.7;
       color: var(--text);
       margin: 0;
+      max-width: 60ch;
     }
 
     .option-list {
@@ -1245,15 +1298,20 @@
 
     .option {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 1rem;
       margin-bottom: 0;
-      padding: 1rem 1.05rem;
+      padding: 1rem 1.15rem;
       border-radius: var(--radius-lg);
       border: 1px solid rgba(26, 36, 48, 0.1);
       background: rgba(255, 255, 255, 0.72);
       cursor: pointer;
       transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+    }
+
+    .option::after {
+      content: "";
+      display: none;
     }
 
     .option:hover {
@@ -1266,6 +1324,23 @@
       border-color: rgba(20, 111, 103, 0.38);
       background: rgba(20, 111, 103, 0.12);
       box-shadow: 0 10px 22px rgba(20, 111, 103, 0.12);
+    }
+
+    .option:has(input:checked)::after {
+      content: "Selected";
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: auto;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      background: rgba(20, 111, 103, 0.14);
+      color: var(--accent-strong);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      align-self: center;
     }
 
     .option-code {
@@ -1287,10 +1362,22 @@
     }
 
     .option-text {
-      flex: 1 1 auto;
       color: var(--text);
       line-height: 1.6;
       font-weight: 500;
+    }
+
+    .option-body {
+      display: grid;
+      gap: 0.2rem;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .option-note {
+      color: var(--text-subtle);
+      font-size: 0.82rem;
+      letter-spacing: 0.03em;
     }
 
     .attempt-actions {
@@ -1299,6 +1386,11 @@
       align-items: center;
       gap: 1rem;
       margin-top: 0.25rem;
+      padding: 1.1rem 1.2rem;
+      border-radius: var(--radius-xl);
+      border: 1px solid rgba(26, 36, 48, 0.08);
+      background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(248, 241, 231, 0.86));
+      box-shadow: var(--shadow-sm);
     }
 
     .summary-list {
@@ -1309,9 +1401,21 @@
       background: rgba(255, 255, 255, 0.45);
     }
 
+    .summary-progress {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .summary-progress-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
     .question-jump-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 0.7rem;
     }
 
@@ -1319,7 +1423,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 46px;
+      min-height: 50px;
       border-radius: 14px;
       border: 1px solid rgba(26, 36, 48, 0.1);
       background: rgba(255, 255, 255, 0.68);
@@ -1350,6 +1454,14 @@
     .question-jump.current.complete {
       background: linear-gradient(135deg, rgba(20, 111, 103, 0.18), rgba(192, 106, 67, 0.16));
       color: var(--text);
+    }
+
+    .attempt-sidebar .card {
+      padding: 1.35rem;
+    }
+
+    .attempt-sidebar .section-head {
+      margin-bottom: 0.9rem;
     }
 
     .progress-track {
@@ -1559,6 +1671,20 @@
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
 
+      .attempt-title {
+        max-width: none;
+        font-size: clamp(2.4rem, 12vw, 4rem);
+      }
+
+      .question-ref {
+        justify-items: start;
+        text-align: left;
+      }
+
+      .option:has(input:checked)::after {
+        display: none;
+      }
+
       .message {
         left: 12px;
         right: 12px;
@@ -1602,7 +1728,7 @@
     }
   </style>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <div class="shell">
     <header class="topbar">
       <div class="brand-block">
@@ -1628,18 +1754,18 @@
           <span class="badge">{{ current_user.full_name }}</span>
           <span class="badge {{ current_user.role.value }}">{{ current_user.role.value|title }}</span>
           {% if current_user.role.value == "admin" %}
-            <a class="button secondary" href="/app/admin">Admin Panel</a>
+            <a class="button secondary small" href="/app/admin">Admin Panel</a>
           {% else %}
-            <a class="button secondary" href="/app/student">Student Dashboard</a>
+            <a class="button secondary small" href="/app/student">Student Dashboard</a>
           {% endif %}
           <form action="/app/logout" method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
             <input type="hidden" name="session_scope" value="{{ current_user.role.value }}">
-            <button type="submit" class="secondary">Sign Out</button>
+            <button type="submit" class="secondary small">Sign Out</button>
           </form>
         {% else %}
-          <a class="button secondary" href="/app/login">Sign In</a>
-          <a class="button" href="/app/register">Register</a>
+          <a class="button secondary small" href="/app/login">Sign In</a>
+          <a class="button small" href="/app/register">Register</a>
         {% endif %}
       </div>
     </header>

@@ -1,52 +1,75 @@
 {% extends "base.html" %}
 {% block title %}Attempt Quiz{% endblock %}
+{% block body_class %}attempt-page{% endblock %}
 {% block content %}
 {% if error %}
   <section class="card">
     <div class="empty-state">
-      <p style="font-size: 2rem; margin-bottom: 12px;">⚠️</p>
       <h2>Attempt unavailable</h2>
       <p>{{ error }}</p>
-      <a class="button secondary" href="/app/student">← Back to dashboard</a>
+      <div class="empty-state-actions">
+        <a class="button secondary" href="/app/student">Back to dashboard</a>
+      </div>
     </div>
   </section>
 {% elif attempt_view.status != "active" %}
   <section class="card">
     <h2>Attempt status: {{ attempt_view.status|title }}</h2>
     <p class="meta">Started {{ attempt_view.started_at|datetime }}, expires {{ attempt_view.expires_at|datetime }}.</p>
-    {% if attempt_view.status in ["submitted", "scored"] %}
-      <a class="button" href="/app/student/results/{{ attempt_view.quiz_id }}">View Result →</a>
-    {% else %}
-      <a class="button secondary" href="/app/student">← Back to dashboard</a>
-    {% endif %}
+    <div class="status-row">
+      {% if attempt_view.status in ["submitted", "scored"] %}
+        <a class="button" href="/app/student/results/{{ attempt_view.quiz_id }}">View Result</a>
+      {% else %}
+        <a class="button secondary" href="/app/student">Back to dashboard</a>
+      {% endif %}
+    </div>
   </section>
 {% else %}
   {% set current_page_start = ((attempt_view.page - 1) * attempt_view.page_size) + 1 %}
   {% set current_page_end = current_page_start + (attempt_view.current_questions|length) - 1 %}
+  {% set answered_count = attempt_view.saved_answers|length %}
+  {% set answered_progress = ((answered_count / attempt_view.total_questions) * 100) if attempt_view.total_questions else 0 %}
   <div class="attempt-shell">
     <div class="attempt-main">
       <section class="hero attempt-hero">
-        <span class="eyebrow">Active Attempt</span>
         <div class="hero-grid">
           <div>
-            <h1>{{ attempt_view.quiz.title }}</h1>
+            <span class="eyebrow">Active Attempt</span>
+            <h1 class="attempt-title">{{ attempt_view.quiz.title }}</h1>
             {% if attempt_view.quiz.description %}
               <p class="hero-lead">{{ attempt_view.quiz.description }}</p>
             {% endif %}
             <div class="attempt-meta">
-              <div class="attempt-chip">Duration: {{ attempt_view.quiz.duration_seconds|duration }}</div>
-              <div class="attempt-chip mono">🔑 {{ attempt_view.attempt_id[:8] }}</div>
+              <div class="attempt-chip">Duration {{ attempt_view.quiz.duration_seconds|duration }}</div>
+              <div class="attempt-chip">Page {{ attempt_view.page }} / {{ attempt_view.total_pages }}</div>
+              <div class="attempt-chip mono">Attempt {{ attempt_view.attempt_id[:8] }}</div>
               <div class="attempt-chip timer" id="timer-chip" data-seconds="{{ attempt_view.remaining_seconds }}"><span id="timer-text"></span></div>
             </div>
           </div>
           <div class="hero-side">
             <div class="hero-panel">
+              <div class="muted-strong">Current slice</div>
+              <div class="detail-grid">
+                <div class="detail-tile">
+                  <div class="meta">Visible questions</div>
+                  <strong>{{ current_page_start }}-{{ current_page_end }}</strong>
+                </div>
+                <div class="detail-tile">
+                  <div class="meta">Answered so far</div>
+                  <strong><span id="hero-answered-count">{{ answered_count }}</span> / {{ attempt_view.total_questions }}</strong>
+                </div>
+              </div>
+              <div class="progress-track" style="margin-top: 0.9rem;">
+                <div class="progress-bar" id="hero-answered-progress" style="--progress: {{ answered_progress }}%;"></div>
+              </div>
+            </div>
+            <div class="hero-panel">
               <div class="muted-strong">Keyboard shortcuts</div>
               <ul>
-                <li><code>A</code> <code>B</code> <code>C</code> <code>D</code> — select option</li>
-                <li><code>←</code> / <code>→</code> — previous / next page</li>
-                <li>Answers <strong>autosave</strong> while the attempt is active.</li>
-                <li>Timer submits automatically when it hits zero.</li>
+                <li><code>A</code> <code>B</code> <code>C</code> <code>D</code> select an option.</li>
+                <li><code>&larr;</code> and <code>&rarr;</code> move between pages.</li>
+                <li>Answers autosave while the attempt is active.</li>
+                <li>The timer submits automatically when it reaches zero.</li>
               </ul>
             </div>
           </div>
@@ -60,10 +83,15 @@
           {% set question_number = attempt_view.question_number_map[question.id] %}
           <section class="quiz-question" id="question-{{ question_number }}">
             <div class="question-head">
-              <div class="question-index">Question {{ question_number }} of {{ attempt_view.total_questions }}</div>
-              <div class="meta mono">{{ question.id }}</div>
+              <div>
+                <div class="question-index">Question {{ question_number }} of {{ attempt_view.total_questions }}</div>
+                <p class="question-copy">{{ question.prompt or question.text }}</p>
+              </div>
+              <div class="question-ref">
+                <span class="badge pending">Single Choice</span>
+                <div class="meta mono">{{ question.id }}</div>
+              </div>
             </div>
-            <p class="question-copy">{{ question.prompt or question.text }}</p>
             <div class="option-list">
               {% for option in question.options %}
                 <label class="option">
@@ -74,20 +102,26 @@
                     {% if attempt_view.saved_answers.get(question.id) == option.id %}checked{% endif %}
                   >
                   <span class="option-code">{{ option.id }}</span>
-                  <span class="option-text">{{ option.text }}</span>
+                  <span class="option-body">
+                    <span class="option-text">{{ option.text }}</span>
+                    <span class="option-note">Press {{ option.id|upper }} to select quickly.</span>
+                  </span>
                 </label>
               {% endfor %}
             </div>
           </section>
         {% endfor %}
         <div class="attempt-actions">
-          <div class="meta">Autosave keeps your in-progress answers durable. Final submit will send the full merged answer set to scoring.</div>
+          <div>
+            <div class="muted-strong">Move confidently</div>
+            <div class="meta">Navigation waits for the latest selection to save before switching pages, and final submit sends the full merged answer set to scoring.</div>
+          </div>
           <div class="nav">
             {% if attempt_view.page > 1 %}
-              <button type="button" class="secondary" data-nav-url="{{ query_url(request, page=attempt_view.page - 1) }}">← Previous Page</button>
+              <button type="button" class="secondary" data-nav-url="{{ query_url(request, page=attempt_view.page - 1) }}">Previous Page</button>
             {% endif %}
             {% if attempt_view.page < attempt_view.total_pages %}
-              <button type="button" class="secondary" data-nav-url="{{ query_url(request, page=attempt_view.page + 1) }}">Next Page →</button>
+              <button type="button" class="secondary" data-nav-url="{{ query_url(request, page=attempt_view.page + 1) }}">Next Page</button>
             {% endif %}
             <button type="button" id="submit-btn" class="danger">Submit Attempt</button>
           </div>
@@ -97,38 +131,47 @@
 
     <aside class="attempt-sidebar">
       <section class="card">
-        <h3>Attempt Summary</h3>
+        <div class="section-head">
+          <div>
+            <h3>Attempt Summary</h3>
+            <p class="meta">Key details stay visible while you work.</p>
+          </div>
+          <span class="badge active">{{ attempt_view.status|title }}</span>
+        </div>
         <div class="summary-list">
           <div class="summary-item">
             <div>
               <div class="meta">Student</div>
               <strong>{{ current_user.full_name }}</strong>
             </div>
-            <span class="badge active">{{ attempt_view.status|title }}</span>
+            <div>
+              <div class="meta">Page</div>
+              <strong>{{ attempt_view.page }} / {{ attempt_view.total_pages }}</strong>
+            </div>
           </div>
           <div class="summary-item">
             <div>
-              <div class="meta">Quiz ID</div>
-              <div class="mono">{{ attempt_view.quiz_id }}</div>
+              <div class="meta">Visible</div>
+              <strong>{{ current_page_start }}-{{ current_page_end }}</strong>
             </div>
             <div>
               <div class="meta">Expires</div>
               <strong>{{ attempt_view.expires_at|datetime }}</strong>
             </div>
           </div>
-          <div class="summary-item" style="display: grid; gap: 10px;">
-            <div style="display: flex; justify-content: space-between; gap: 10px;">
+          <div class="summary-item summary-progress">
+            <div class="summary-progress-head">
               <div class="meta">Answered</div>
-              <strong><span id="answered-count">{{ attempt_view.saved_answers|length }}</span> / {{ attempt_view.total_questions }}</strong>
+              <strong><span id="answered-count">{{ answered_count }}</span> / {{ attempt_view.total_questions }}</strong>
             </div>
             <div class="progress-track">
-              <div class="progress-bar" id="answered-progress" style="--progress: {{ ((attempt_view.saved_answers|length / attempt_view.total_questions) * 100) if attempt_view.total_questions else 0 }}%;"></div>
+              <div class="progress-bar" id="answered-progress" style="--progress: {{ answered_progress }}%;"></div>
             </div>
           </div>
           <div class="summary-item">
             <div>
               <div class="meta">Autosave</div>
-              <strong id="autosave-status">✅ Saved</strong>
+              <strong id="autosave-status">Saved</strong>
             </div>
             <div class="meta" id="autosave-detail">All visible changes are persisted.</div>
           </div>
@@ -139,7 +182,7 @@
         <div class="section-head">
           <div>
             <h3>Question Map</h3>
-            <p class="meta">Jump to any part of the paper.</p>
+            <p class="meta">Jump anywhere. Answered questions stay highlighted.</p>
           </div>
           <span class="badge">{{ attempt_view.total_questions }} total</span>
         </div>
@@ -165,7 +208,9 @@
       var output = document.getElementById("timer-text");
       var form = document.getElementById("attempt-form");
       var answeredCount = document.getElementById("answered-count");
+      var heroAnsweredCount = document.getElementById("hero-answered-count");
       var answeredProgress = document.getElementById("answered-progress");
+      var heroAnsweredProgress = document.getElementById("hero-answered-progress");
       var autosaveStatus = document.getElementById("autosave-status");
       var autosaveDetail = document.getElementById("autosave-detail");
       var palette = Array.from(document.querySelectorAll(".question-jump"));
@@ -189,18 +234,22 @@
         var minutes = Math.floor(remaining / 60).toString().padStart(2, "0");
         var seconds = (remaining % 60).toString().padStart(2, "0");
         output.textContent = minutes + ":" + seconds;
-        /* Color transitions: green > yellow > red */
+        timerChip.style.animation = "";
         if (remaining <= 60) {
-          timerChip.style.background = "rgba(239, 68, 68, 0.15)";
-          timerChip.style.color = "var(--error)";
-          timerChip.style.borderColor = "var(--error)";
+          timerChip.style.background = "rgba(190, 81, 70, 0.18)";
+          timerChip.style.color = "#fff8f0";
+          timerChip.style.borderColor = "rgba(255, 255, 255, 0.2)";
           if (remaining <= 30) {
             timerChip.style.animation = "pulse 0.6s ease infinite";
           }
         } else if (remaining <= 300) {
-          timerChip.style.background = "rgba(245, 158, 11, 0.15)";
-          timerChip.style.color = "var(--warning)";
-          timerChip.style.borderColor = "var(--warning)";
+          timerChip.style.background = "rgba(185, 122, 36, 0.18)";
+          timerChip.style.color = "#fff8f0";
+          timerChip.style.borderColor = "rgba(255, 255, 255, 0.2)";
+        } else {
+          timerChip.style.background = "rgba(255, 255, 255, 0.08)";
+          timerChip.style.color = "#fff8f0";
+          timerChip.style.borderColor = "rgba(255, 255, 255, 0.12)";
         }
       }
 
@@ -211,8 +260,11 @@
 
       function updateProgress() {
         var answered = Object.keys(answerState).length;
+        var progress = totalQuestions ? ((answered / totalQuestions) * 100) + "%" : "0%";
         answeredCount.textContent = String(answered);
-        answeredProgress.style.setProperty("--progress", ((answered / totalQuestions) * 100) + "%");
+        heroAnsweredCount.textContent = String(answered);
+        answeredProgress.style.setProperty("--progress", progress);
+        heroAnsweredProgress.style.setProperty("--progress", progress);
         palette.forEach(function (item) {
           item.classList.toggle("complete", Object.prototype.hasOwnProperty.call(answerState, item.dataset.questionId));
         });
@@ -229,7 +281,7 @@
       async function autosaveNow() {
         if (!dirty) return true;
         if (saveInFlight) return saveInFlight;
-        setSaveState("💾 Saving...", "Persisting your latest answers.");
+        setSaveState("Saving...", "Persisting your latest answers.");
         var headers = { "Content-Type": "application/json" };
         if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
         saveInFlight = fetch(autosaveUrl, {
@@ -246,28 +298,25 @@
         }).then(function (response) {
           if (response.ok) {
             dirty = false;
-            setSaveState("✅ Saved", "All visible changes are persisted.");
+            setSaveState("Saved", "All visible changes are persisted.");
             return true;
           }
-          /* Attempt expired or already submitted — stop interaction */
           if (response.status === 409) {
             attemptEnded = true;
-            setSaveState("⛔ Attempt ended", "Redirecting...");
+            setSaveState("Attempt ended", "Redirecting to the dashboard...");
             if (interval) window.clearInterval(interval);
-            /* Disable the form to prevent further interaction */
             form.querySelectorAll("input, button").forEach(function (el) { el.disabled = true; });
             window.setTimeout(function () { window.location.href = "/app/student"; }, 3000);
             return false;
           }
-          /* Session expired */
           if (response.status === 401 || response.status === 403) {
-            setSaveState("🔐 Session expired", "Redirecting to login...");
+            setSaveState("Session expired", "Redirecting to sign in...");
             window.setTimeout(function () { window.location.href = "/app/login"; }, 2000);
             return false;
           }
           throw new Error("Autosave failed (" + response.status + ")");
         }).catch(function () {
-          setSaveState("❌ Save failed", "Retry by navigating or selecting an option.");
+          setSaveState("Save failed", "Retry by navigating or selecting an option.");
           return false;
         }).finally(function () {
           saveInFlight = null;
@@ -285,7 +334,7 @@
           collectAnswerState();
           dirty = true;
           updateProgress();
-          setSaveState("⏳ Unsaved changes", "Saving will happen automatically.");
+          setSaveState("Unsaved changes", "Saving will happen automatically.");
           scheduleAutosave();
         });
       });
@@ -302,21 +351,20 @@
         });
       });
 
-      /* Submit with confirmation */
-      document.getElementById("submit-btn").addEventListener("click", function(e) {
-        e.preventDefault();
+      document.getElementById("submit-btn").addEventListener("click", function (event) {
+        event.preventDefault();
         if (attemptEnded) return;
         collectAnswerState();
         var answered = Object.keys(answerState).length;
         var unanswered = totalQuestions - answered;
-        var msg = "You have answered " + answered + " of " + totalQuestions + " questions.";
+        var message = "You have answered " + answered + " of " + totalQuestions + " questions.";
         if (unanswered > 0) {
-          msg += " " + unanswered + " question(s) are still unanswered.";
+          message += " " + unanswered + " question(s) are still unanswered.";
         }
-        msg += " This action cannot be undone.";
-        showConfirmModal("Submit Attempt?", msg, function() {
+        message += " This action cannot be undone.";
+        showConfirmModal("Submit Attempt?", message, function () {
           attemptEnded = true;
-          autosaveNow().then(function(ok) {
+          autosaveNow().then(function (ok) {
             if (ok !== false) form.submit();
           });
         });
@@ -333,30 +381,28 @@
         navigator.sendBeacon(autosaveUrl, new Blob([payload], { type: "application/json" }));
       });
 
-      /* Keyboard shortcuts */
-      document.addEventListener("keydown", function(e) {
-        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
-        var optionKeys = {"a": 0, "b": 1, "c": 2, "d": 3};
-        var key = e.key.toLowerCase();
+      document.addEventListener("keydown", function (event) {
+        if (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA" || event.target.tagName === "SELECT") return;
+        var optionKeys = { "a": 0, "b": 1, "c": 2, "d": 3 };
+        var key = event.key.toLowerCase();
 
         if (key === "arrowleft" && currentPage > 1) {
-          e.preventDefault();
+          event.preventDefault();
           var prevBtn = document.querySelector('[data-nav-url*="page=' + (currentPage - 1) + '"]');
           if (prevBtn) prevBtn.click();
         } else if (key === "arrowright" && currentPage < totalPages) {
-          e.preventDefault();
+          event.preventDefault();
           var nextBtn = document.querySelector('[data-nav-url*="page=' + (currentPage + 1) + '"]');
           if (nextBtn) nextBtn.click();
-        } else if (optionKeys.hasOwnProperty(key)) {
-          /* Select the nth option of the currently focused/first question */
+        } else if (Object.prototype.hasOwnProperty.call(optionKeys, key)) {
           var questions = document.querySelectorAll(".quiz-question");
           if (questions.length > 0) {
             var target = questions[0];
             var options = target.querySelectorAll('input[type="radio"]');
-            var idx = optionKeys[key];
-            if (options[idx]) {
-              options[idx].checked = true;
-              options[idx].dispatchEvent(new Event("change", {bubbles: true}));
+            var index = optionKeys[key];
+            if (options[index]) {
+              options[index].checked = true;
+              options[index].dispatchEvent(new Event("change", { bubbles: true }));
             }
           }
         }
@@ -371,7 +417,6 @@
           remaining = 0;
           renderTimer();
           window.clearInterval(interval);
-          /* Only auto-submit if the attempt hasn't already been marked ended by autosave */
           if (!attemptEnded) {
             attemptEnded = true;
             form.submit();
