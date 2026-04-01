@@ -1048,6 +1048,27 @@
       align-items: center;
     }
 
+    body[class~="student-dashboard-page"] .brand-block .meta {
+      display: none;
+    }
+
+    body[class~="student-dashboard-page"] .topbar .nav a[href="/app/student"] {
+      display: none;
+    }
+
+    body[class~="student-dashboard-page"] .hero-grid {
+      grid-template-columns: 1fr;
+    }
+
+    body[class~="student-dashboard-page"] .hero h1 {
+      font-size: clamp(2.8rem, 5.5vw, 4.4rem);
+      max-width: 10ch;
+    }
+
+    body[class~="student-dashboard-page"] .hero-lead {
+      max-width: 44ch;
+    }
+
     .form-note {
       padding: 0.95rem 1rem;
       border-left: 4px solid var(--accent);

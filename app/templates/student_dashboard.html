@@ -1,64 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Student Dashboard{% endblock %}
+{% block body_class %}student-dashboard-page{% endblock %}
 {% block content %}
-{% set ns = namespace(active=0, completed=0, expired=0, ready=0) %}
+{% set ns = namespace(active=0, completed=0, ready=0) %}
 {% for quiz in quizzes %}
   {% if quiz.attempt_status == "active" %}
     {% set ns.active = ns.active + 1 %}
   {% elif quiz.attempt_status in ["submitted", "scored"] %}
     {% set ns.completed = ns.completed + 1 %}
-  {% elif quiz.attempt_status == "expired" %}
-    {% set ns.expired = ns.expired + 1 %}
-  {% else %}
+  {% elif not quiz.attempt_status and quiz.availability_status == "available" %}
     {% set ns.ready = ns.ready + 1 %}
   {% endif %}
 {% endfor %}
 <section class="hero">
   <div class="hero-grid">
     <div>
-      <span class="eyebrow">Student Workspace</span>
-      <h1>Move through every quiz with a calmer, clearer dashboard.</h1>
-      <p class="hero-lead">Start what is open, jump back into active work, and revisit scored results without digging through clutter.</p>
-      <div class="pill-row" style="margin-top: 1.4rem;">
-        <span class="pill">Ready {{ ns.ready }}</span>
-        <span class="pill">Active {{ ns.active }}</span>
-        <span class="pill">Completed {{ ns.completed }}</span>
-        <span class="pill">Expired {{ ns.expired }}</span>
-      </div>
-    </div>
-    <div class="hero-side">
-      <div class="hero-panel">
-        <div class="muted-strong">At a glance</div>
-        <div class="detail-grid">
-          <div class="detail-tile">
-            <div class="meta">Student</div>
-            <strong>{{ current_user.full_name }}</strong>
-          </div>
-          <div class="detail-tile">
-            <div class="meta">Available quizzes</div>
-            <strong>{{ quizzes|length }}</strong>
-          </div>
-        </div>
-      </div>
-      <div class="hero-panel">
-        <div class="muted-strong">Flow</div>
-        <ul>
-          <li>Starting a quiz begins the timer immediately.</li>
-          <li>Active attempts stay resumable until they expire or submit.</li>
-          <li>Scored work remains available from this same dashboard.</li>
-        </ul>
-      </div>
+      <span class="eyebrow">Student Dashboard</span>
+      <h1>Current Assessments</h1>
+      <p class="hero-lead">Open available quizzes, resume active attempts, and review completed results.</p>
     </div>
   </div>
 </section>
 
 <section class="metrics">
   <div class="metric">
-    <div class="meta">Available Tests</div>
+    <div class="meta">Total Assessments</div>
     <div class="value">{{ quizzes|length }}</div>
   </div>
   <div class="metric">
-    <div class="meta">Ready</div>
+    <div class="meta">Available Now</div>
     <div class="value">{{ ns.ready }}</div>
   </div>
   <div class="metric">
@@ -98,20 +68,20 @@
           <strong>{{ quiz.duration_seconds|duration }}</strong>
         </div>
         <div class="detail-tile">
-          <div class="meta">Next step</div>
+          <div class="meta">Action</div>
           <strong>
             {% if quiz.attempt_status in ["submitted", "scored"] %}
-              Result ready
+              View result
             {% elif quiz.attempt_status == "active" %}
               Resume attempt
             {% elif quiz.attempt_status == "expired" %}
-              Review unavailable
+              Attempt expired
             {% elif quiz.availability_status == "upcoming" %}
-              Opens on schedule
+              Wait for opening
             {% elif quiz.availability_status == "closed" %}
               Window closed
             {% else %}
-              Ready to begin
+              Start assessment
             {% endif %}
           </strong>
         </div>
@@ -143,7 +113,7 @@
         {% else %}
           <div class="detail-tile">
             <div class="meta">Status</div>
-            <strong>Ready to start</strong>
+            <strong>Available now</strong>
           </div>
         {% endif %}
       </div>
@@ -153,11 +123,11 @@
         {% elif quiz.attempt_status == "active" %}
           <a class="button" href="/app/student/attempts/{{ quiz.attempt_id }}">Resume Attempt</a>
         {% elif quiz.attempt_status == "expired" %}
-          <span class="form-note">This attempt has expired and can no longer be opened.</span>
+          <span class="form-note">Attempt expired.</span>
         {% elif quiz.availability_status == "upcoming" %}
-          <span class="form-note">This test will open at {{ quiz.availability_start_at|datetime if quiz.availability_start_at else "the scheduled time" }}.</span>
+          <span class="form-note">Opens {{ quiz.availability_start_at|datetime if quiz.availability_start_at else "as scheduled" }}.</span>
         {% elif quiz.availability_status == "closed" %}
-          <span class="form-note">The quiz window has closed.</span>
+          <span class="form-note">Window closed.</span>
         {% else %}
           <form action="/app/student/quizzes/{{ quiz.quiz_id }}/start" method="post" class="start-quiz-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
@@ -169,8 +139,8 @@
   {% else %}
     <section class="card">
       <div class="empty-state">
-        <h3>No tests available right now</h3>
-        <p class="meta">Check back later after a new quiz is published by the admin team.</p>
+        <h3>No assessments available</h3>
+        <p class="meta">Published assessments will appear here.</p>
       </div>
     </section>
   {% endfor %}
@@ -184,8 +154,8 @@
       e.preventDefault();
       var title = form.closest('.quiz-card').querySelector('h2, h3').textContent.trim();
       showConfirmModal(
-        'Start Quiz?',
-        'You are about to start "' + title + '". The timer will begin immediately and cannot be paused. Make sure you are ready.',
+        'Start assessment?',
+        'The timer for "' + title + '" will begin immediately and cannot be paused.',
         function() { form.submit(); }
       );
     });
