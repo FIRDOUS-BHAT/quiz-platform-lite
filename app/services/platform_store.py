@@ -222,9 +222,12 @@ class PlatformStore:
         page: int,
         page_size: int,
         query: str | None = None,
+        lifecycle_status: str | None = None,
     ) -> AdminQuizPage:
         search_term = self._normalized_query(query)
         filters = self._quiz_search_filters(search_term)
+        if lifecycle_status:
+            filters.append(Quiz.lifecycle_status == lifecycle_status)
 
         async with self.session_factory() as session:
             total_items = int(await session.scalar(select(func.count()).select_from(Quiz).where(*filters)) or 0)
@@ -245,6 +248,13 @@ class PlatformStore:
             now = utc_now_epoch()
             items = [self._quiz_to_catalog_item(quiz, now=now) for quiz in quizzes]
             return AdminQuizPage(items=items, pagination=pagination)
+
+    async def get_admin_quiz_catalog_item(self, quiz_id: str) -> QuizCatalogItem | None:
+        async with self.session_factory() as session:
+            quiz = await session.get(Quiz, quiz_id)
+            if quiz is None:
+                return None
+            return self._quiz_to_catalog_item(quiz, now=utc_now_epoch())
 
     async def list_quizzes_for_admin(self) -> list[QuizCatalogItem]:
         async with self.session_factory() as session:
@@ -509,6 +519,41 @@ class PlatformStore:
                 )
             ).all()
             return [AdminQuizPerformanceRecord.model_validate(dict(row._mapping)) for row in rows]
+
+    async def get_quiz_performance_record(self, quiz_id: str) -> AdminQuizPerformanceRecord | None:
+        participant_expr = func.count(Attempt.attempt_id)
+        submitted_expr = func.coalesce(
+            func.sum(case((Attempt.status.in_(("submitted", "scored")), 1), else_=0)),
+            0,
+        )
+        scored_expr = func.coalesce(
+            func.sum(case((Attempt.status == "scored", 1), else_=0)),
+            0,
+        )
+
+        async with self.session_factory() as session:
+            row = (
+                await session.execute(
+                    select(
+                        Quiz.quiz_id,
+                        Quiz.title,
+                        Quiz.duration_seconds,
+                        participant_expr.label("participant_count"),
+                        submitted_expr.label("submitted_count"),
+                        scored_expr.label("scored_count"),
+                        func.avg(Result.percentage).label("average_percentage"),
+                        func.max(Result.percentage).label("top_percentage"),
+                    )
+                    .select_from(Quiz)
+                    .outerjoin(Attempt, Attempt.quiz_id == Quiz.quiz_id)
+                    .outerjoin(Result, and_(Result.quiz_id == Quiz.quiz_id, Result.user_id == Attempt.user_id))
+                    .where(Quiz.quiz_id == quiz_id)
+                    .group_by(Quiz.quiz_id, Quiz.title, Quiz.duration_seconds, Quiz.created_at)
+                )
+            ).first()
+            if row is None:
+                return None
+            return AdminQuizPerformanceRecord.model_validate(dict(row._mapping))
 
     async def list_quizzes_for_student(self, user_id: str) -> list[QuizCatalogItem]:
         student_attempt = aliased(Attempt)

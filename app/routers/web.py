@@ -464,6 +464,7 @@ async def admin_quizzes(
     quiz_page: int = Query(1, ge=1),
     quiz_page_size: int = Query(settings.admin_default_page_size, ge=1, le=settings.admin_max_page_size),
     quiz_q: str | None = Query(None, max_length=120),
+    quiz_lifecycle_status: str | None = Query(None, max_length=32),
     performance_page: int = Query(1, ge=1),
     performance_page_size: int = Query(settings.admin_default_page_size, ge=1, le=settings.admin_max_page_size),
     performance_q: str | None = Query(None, max_length=120),
@@ -471,12 +472,16 @@ async def admin_quizzes(
     store=Depends(get_store),
 ) -> HTMLResponse:
     quiz_q = _normalized_text(quiz_q)
+    quiz_lifecycle_status = _normalized_text(quiz_lifecycle_status)
+    if quiz_lifecycle_status not in ADMIN_QUIZ_LIFECYCLE_STATUSES:
+        quiz_lifecycle_status = None
     performance_q = _normalized_text(performance_q)
 
     quiz_catalog = await store.list_quiz_catalog_page(
         page=quiz_page,
         page_size=quiz_page_size,
         query=quiz_q,
+        lifecycle_status=quiz_lifecycle_status,
     )
     quiz_performance = await store.list_quiz_performance_page(
         page=performance_page,
@@ -493,6 +498,7 @@ async def admin_quizzes(
         quiz_filters={
             "query": quiz_q,
             "page_size": quiz_page_size,
+            "lifecycle_status": quiz_lifecycle_status,
         },
         performance_filters={
             "query": performance_q,
@@ -501,6 +507,73 @@ async def admin_quizzes(
         quiz_page_numbers=_page_window(quiz_catalog.pagination),
         performance_page_numbers=_page_window(quiz_performance.pagination),
         lifecycle_status_options=ADMIN_QUIZ_LIFECYCLE_STATUSES,
+    )
+
+
+@router.get("/app/admin/quizzes/{quiz_id}", response_class=HTMLResponse)
+async def admin_quiz_detail(
+    request: Request,
+    quiz_id: str,
+    attempt_page: int = Query(1, ge=1),
+    attempt_page_size: int = Query(settings.admin_default_page_size, ge=1, le=settings.admin_max_page_size),
+    attempt_q: str | None = Query(None, max_length=120),
+    attempt_status: str | None = Query(None, max_length=32),
+    current_user: UserSession = Depends(get_current_admin),
+    store=Depends(get_store),
+) -> HTMLResponse:
+    attempt_q = _normalized_text(attempt_q)
+    attempt_status = _normalized_text(attempt_status)
+    if attempt_status not in ADMIN_ATTEMPT_STATUSES:
+        attempt_status = None
+
+    quiz = await store.get_admin_quiz_catalog_item(quiz_id)
+    if quiz is None:
+        return _render_admin(
+            request,
+            "admin_quiz_detail.html",
+            current_user=current_user,
+            admin_section="quizzes",
+            quiz=None,
+            quiz_performance=None,
+            question_count=None,
+            quiz_attempts=None,
+            attempt_filters={
+                "query": attempt_q,
+                "status": attempt_status,
+                "page_size": attempt_page_size,
+            },
+            attempt_page_numbers=[],
+            attempt_status_options=ADMIN_ATTEMPT_STATUSES,
+            error="Quiz not found",
+        )
+
+    quiz_performance = await store.get_quiz_performance_record(quiz_id)
+    quiz_definition = await store.get_quiz_definition(quiz_id)
+    question_count = len(quiz_definition.questions) if quiz_definition is not None else None
+    quiz_attempts = await store.list_participation_records(
+        page=attempt_page,
+        page_size=attempt_page_size,
+        query=attempt_q,
+        quiz_id=quiz_id,
+        attempt_status=attempt_status,
+    )
+    return _render_admin(
+        request,
+        "admin_quiz_detail.html",
+        current_user=current_user,
+        admin_section="quizzes",
+        quiz=quiz,
+        quiz_performance=quiz_performance,
+        question_count=question_count,
+        quiz_attempts=quiz_attempts,
+        attempt_filters={
+            "query": attempt_q,
+            "status": attempt_status,
+            "page_size": attempt_page_size,
+        },
+        attempt_page_numbers=_page_window(quiz_attempts.pagination),
+        attempt_status_options=ADMIN_ATTEMPT_STATUSES,
+        error=None,
     )
 
 

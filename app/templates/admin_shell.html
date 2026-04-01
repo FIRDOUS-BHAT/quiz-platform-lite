@@ -1,10 +1,10 @@
 {% extends "base.html" %}
+{% block body_class %}admin-page{% endblock %}
 {% block content %}
 <section class="surface admin-nav-shell">
   <div>
-    <span class="eyebrow">⚙️ Admin Workspace</span>
-    <h2>Separate operational views keep the panel readable as data grows.</h2>
-    <p class="meta">Use focused screens for publishing, quiz reporting, student tracking, and attempt operations instead of forcing every table into one page.</p>
+    <span class="eyebrow">Admin Panel</span>
+    <h2>Administration</h2>
   </div>
   <nav class="admin-subnav" aria-label="Admin sections">
     {% for item in admin_nav_items %}

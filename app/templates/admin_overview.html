@@ -1,47 +1,17 @@
 {% extends "admin_shell.html" %}
 {% block title %}Admin Overview{% endblock %}
+{% block body_class %}{{ super() }} admin-overview-page{% endblock %}
 {% block admin_content %}
 <section class="hero">
   <div class="hero-grid">
     <div>
-      <span class="eyebrow">📊 Overview</span>
-      <h1>Run the platform from a cleaner control room.</h1>
-      <p class="hero-lead">The admin area now separates quiz publishing, student management, and attempt monitoring into dedicated views so operational work does not collapse into one overloaded screen.</p>
+      <span class="eyebrow">Overview</span>
+      <h1>Platform Overview</h1>
+      <p class="hero-lead">Monitor quizzes, students, attempts, and scoring from one dashboard.</p>
       <div class="toolbar-actions" style="margin-top: 24px;">
-        <a class="button" href="/app/admin/quizzes">📝 Manage Quizzes</a>
-        <a class="button secondary" href="/app/admin/students">👥 Review Students</a>
-        <a class="button secondary" href="/app/admin/attempts">📋 Monitor Attempts</a>
-      </div>
-    </div>
-    <div class="hero-side">
-      <div class="hero-panel">
-        <div class="muted-strong">💡 Admin design direction</div>
-        <ul>
-          <li>Overview stays summary-first.</li>
-          <li>Quiz catalog and analytics live together on their own page.</li>
-          <li>Student and attempt records are isolated so filters stay manageable.</li>
-        </ul>
-      </div>
-      <div class="hero-panel">
-        <div class="muted-strong">📈 Current system scale</div>
-        <div class="detail-grid" style="margin-top: 12px;">
-          <div class="detail-tile">
-            <div class="meta">Quizzes</div>
-            <strong>{{ summary.total_quizzes }}</strong>
-          </div>
-          <div class="detail-tile">
-            <div class="meta">Students</div>
-            <strong>{{ summary.total_students }}</strong>
-          </div>
-          <div class="detail-tile">
-            <div class="meta">Attempts</div>
-            <strong>{{ summary.total_attempts }}</strong>
-          </div>
-          <div class="detail-tile">
-            <div class="meta">Scored</div>
-            <strong>{{ summary.scored_attempts }}</strong>
-          </div>
-        </div>
+        <a class="button" href="/app/admin/quizzes">Manage Quizzes</a>
+        <a class="button secondary" href="/app/admin/students">Students</a>
+        <a class="button secondary" href="/app/admin/attempts">Attempts</a>
       </div>
     </div>
   </div>
@@ -49,43 +19,82 @@
 
 <section class="metrics">
   <div class="metric">
-    <div class="meta">📝 Total Quizzes</div>
+    <div class="meta">Quizzes</div>
     <div class="value">{{ summary.total_quizzes }}</div>
   </div>
   <div class="metric">
-    <div class="meta">👥 Registered Students</div>
+    <div class="meta">Students</div>
     <div class="value">{{ summary.total_students }}</div>
   </div>
   <div class="metric">
-    <div class="meta">📋 Total Attempts</div>
+    <div class="meta">Attempts</div>
     <div class="value">{{ summary.total_attempts }}</div>
   </div>
   <div class="metric">
-    <div class="meta">✅ Scored Attempts</div>
+    <div class="meta">Scored</div>
     <div class="value">{{ summary.scored_attempts }}</div>
   </div>
+</section>
+
+<section class="admin-module-grid">
+  <section class="card admin-module-card">
+    <div>
+      <span class="eyebrow">Quizzes</span>
+      <h2>Quiz Management</h2>
+      <p class="meta">Import workbooks, control lifecycle status, manage availability windows, and review quiz analytics.</p>
+    </div>
+    <div class="toolbar-actions">
+      <a class="button" href="/app/admin/quizzes">Open Quizzes</a>
+    </div>
+  </section>
+
+  <section class="card admin-module-card">
+    <div>
+      <span class="eyebrow">Students</span>
+      <h2>Student Records</h2>
+      <p class="meta">Search registrations, review progress, and open individual student profiles when you need more detail.</p>
+    </div>
+    <div class="toolbar-actions">
+      <a class="button" href="/app/admin/students">Open Students</a>
+    </div>
+  </section>
+
+  <section class="card admin-module-card">
+    <div>
+      <span class="eyebrow">Attempts</span>
+      <h2>Attempt Monitoring</h2>
+      <p class="meta">Filter attempt activity by student, quiz, and status without loading operational records into the overview.</p>
+    </div>
+    <div class="toolbar-actions">
+      <a class="button" href="/app/admin/attempts">Open Attempts</a>
+    </div>
+  </section>
 </section>
 
 <div class="grid">
   <section class="list-card">
     <div class="list-head">
       <div>
-        <h2>📄 Recent Quizzes</h2>
-        <p class="meta">Newest quiz entries across draft, published, and archived states.</p>
+        <h2>Latest Quizzes</h2>
       </div>
-      <a class="button secondary small" href="/app/admin/quizzes">Open quizzes →</a>
+      <a class="button secondary small" href="/app/admin/quizzes">View Quizzes</a>
     </div>
-    <div class="list-stack">
+    <div class="summary-list">
       {% for quiz in recent_quizzes.items %}
-        <div class="list-item">
-          <strong>{{ quiz.title }}</strong>
-          <div class="meta mono">{{ quiz.quiz_id }}</div>
-          <div class="meta">Duration {{ quiz.duration_seconds|duration }} · Created {{ quiz.created_at|datetime }}</div>
+        <div class="summary-item admin-preview-item">
+          <div class="admin-preview-main">
+            <strong>{{ quiz.title }}</strong>
+            <div class="meta mono">{{ quiz.quiz_id }}</div>
+          </div>
+          <div class="admin-preview-meta">
+            <span class="badge {% if quiz.lifecycle_status == 'published' %}active{% elif quiz.lifecycle_status == 'draft' %}pending{% elif quiz.lifecycle_status == 'archived' %}expired{% endif %}">{{ quiz.lifecycle_status|title }}</span>
+            <div class="meta">{{ quiz.duration_seconds|duration }}</div>
+            <div class="meta">Created {{ quiz.created_at|datetime }}</div>
+          </div>
         </div>
       {% else %}
         <div class="empty-state">
-          <p style="font-size: 1.5rem; margin-bottom: 8px;">📝</p>
-          No quizzes published yet.
+          No quizzes available.
         </div>
       {% endfor %}
     </div>
@@ -94,22 +103,25 @@
   <section class="list-card">
     <div class="list-head">
       <div>
-        <h2>👤 New Students</h2>
-        <p class="meta">Latest registrations entering the platform.</p>
+        <h2>Latest Students</h2>
       </div>
-      <a class="button secondary small" href="/app/admin/students">Open students →</a>
+      <a class="button secondary small" href="/app/admin/students">View Students</a>
     </div>
-    <div class="list-stack">
+    <div class="summary-list">
       {% for student in recent_students.items %}
-        <div class="list-item">
-          <strong><a class="text-link" href="/app/admin/students/{{ student.user_id }}">{{ student.full_name }}</a></strong>
-          <div class="meta">{{ student.email }}</div>
-          <div class="meta">Joined {{ student.created_at|datetime }} · Started {{ student.quizzes_started }} quizzes</div>
+        <div class="summary-item admin-preview-item">
+          <div class="admin-preview-main">
+            <strong><a class="text-link" href="/app/admin/students/{{ student.user_id }}">{{ student.full_name }}</a></strong>
+            <div class="meta">{{ student.email }}</div>
+          </div>
+          <div class="admin-preview-meta">
+            <div class="meta">Joined {{ student.created_at|datetime }}</div>
+            <div class="meta">Started {{ student.quizzes_started }}</div>
+          </div>
         </div>
       {% else %}
         <div class="empty-state">
-          <p style="font-size: 1.5rem; margin-bottom: 8px;">👥</p>
-          No student registrations yet.
+          No students available.
         </div>
       {% endfor %}
     </div>
@@ -119,10 +131,9 @@
 <section class="table-panel">
   <div class="section-head">
     <div>
-      <h2>⏱ Recent Attempts</h2>
-      <p class="meta">Latest attempt activity across the platform.</p>
+      <h2>Recent Attempts</h2>
     </div>
-    <a class="button secondary small" href="/app/admin/attempts">Open attempts →</a>
+    <a class="button secondary small" href="/app/admin/attempts">View Attempts</a>
   </div>
   <div class="table-wrap">
     <table>

@@ -1,46 +1,41 @@
 {% extends "admin_shell.html" %}
 {% block title %}Quiz Management{% endblock %}
+{% block body_class %}{{ super() }} admin-quizzes-page{% endblock %}
 {% block admin_content %}
 <section class="hero">
   <div class="hero-grid">
     <div>
-      <span class="eyebrow">📝 Quizzes</span>
-      <h1>Control quiz lifecycle, schedule release windows, and review performance from one place.</h1>
-      <p class="hero-lead">This page now handles workbook import, draft versus published state, release windows, and quiz-level analytics without pushing those controls into the student flow.</p>
+      <span class="eyebrow">Quizzes</span>
+      <h1>Quiz Catalog</h1>
+      <p class="hero-lead">Browse the catalog, filter large result sets, and open an individual quiz when you need to change publishing or schedule settings.</p>
     </div>
     <div class="hero-side">
       <div class="hero-panel">
-        <div class="muted-strong">📊 Catalog size</div>
+        <div class="muted-strong">Catalog Summary</div>
         <div class="detail-grid" style="margin-top: 12px;">
           <div class="detail-tile">
             <div class="meta">Quizzes</div>
             <strong>{{ quiz_catalog.pagination.total_items }}</strong>
           </div>
           <div class="detail-tile">
-            <div class="meta">Analytics rows</div>
+            <div class="meta">Analytics Rows</div>
             <strong>{{ quiz_performance.pagination.total_items }}</strong>
           </div>
         </div>
-      </div>
-      <div class="hero-panel">
-        <div class="muted-strong">📋 Workbook format</div>
-        <ul>
-          <li><code>metadata</code> sheet with rows like <code>title</code>, <code>description</code>, <code>duration_seconds</code>, and optional <code>availability_start_at</code> / <code>availability_end_at</code>.</li>
-          <li><code>questions</code> sheet with columns <code>question_id</code>, <code>question_text</code>, <code>option_a</code> to <code>option_d</code>, and <code>correct_option</code>.</li>
-        </ul>
       </div>
     </div>
   </div>
 </section>
 
-<div class="grid">
-  <section class="card">
+<section class="admin-module-grid">
+  <section class="card admin-module-card">
     <div class="section-head">
       <div>
-        <h2>📤 Upload Test Series</h2>
-        <p class="meta">Import a workbook, choose its initial lifecycle state, and optionally set a release window.</p>
+        <span class="eyebrow">Import</span>
+        <h2>Upload Workbook</h2>
+        <p class="meta">Create a quiz from an Excel workbook and optionally set its initial availability window.</p>
       </div>
-      <span class="badge pending">Excel Import</span>
+      <span class="badge pending">Excel</span>
     </div>
     <form action="/app/admin/upload" method="post" enctype="multipart/form-data" class="stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
@@ -66,41 +61,41 @@
           <input id="availability_end_at" name="availability_end_at" type="datetime-local">
         </div>
       </div>
-      <button type="submit">Import Workbook →</button>
-      <div class="form-note">Leave the schedule blank to keep the quiz continuously available whenever its lifecycle status is <strong>Published</strong>. Workbook and JSON/text schedule values without an explicit timezone are interpreted as {{ local_timezone_label() }}.</div>
+      <div class="toolbar-actions">
+        <button type="submit">Import Workbook</button>
+      </div>
+      <div class="form-note">Leave the schedule blank to keep the quiz continuously available whenever its lifecycle status is <strong>Published</strong>.</div>
     </form>
   </section>
 
-  <section class="list-card">
-    <div class="list-head">
-      <div>
-        <h2>💡 Why this page exists</h2>
-        <p class="meta">Quiz publishing and quiz reporting share the same domain, so they stay together while student and attempt operations stay separate.</p>
-      </div>
-      <span class="badge active">Focused view</span>
+  <section class="card admin-module-card">
+    <div>
+      <span class="eyebrow">Workflow</span>
+      <h2>Catalog First</h2>
+      <p class="meta">Use this page to scan and filter quizzes. Open a quiz to change its settings, review recent attempts, or remove it from the catalog.</p>
     </div>
-    <div class="list-stack">
-      <div class="list-item">
-        <strong>🔄 Lifecycle control</strong>
-        <div class="meta">Keep quizzes in draft until they are reviewed, publish them when ready, and archive them when they are no longer active.</div>
+    <div class="summary-list">
+      <div class="summary-item">
+        <strong>Browse efficiently</strong>
+        <div class="meta">Search, filter by lifecycle, and paginate through the catalog without expanding every row.</div>
       </div>
-      <div class="list-item">
-        <strong>📅 Release windows</strong>
-        <div class="meta">Open and close a test series on schedule so students only start during the intended window.</div>
+      <div class="summary-item">
+        <strong>Manage by quiz</strong>
+        <div class="meta">Move scheduling and status edits into a dedicated quiz screen so the list stays readable as records grow.</div>
       </div>
-      <div class="list-item">
-        <strong>📈 Performance review</strong>
-        <div class="meta">Track participant counts, submission volume, and score quality per quiz.</div>
+      <div class="summary-item">
+        <strong>Keep analytics separate</strong>
+        <div class="meta">Use the performance section for high-level reporting while the catalog focuses on operational control.</div>
       </div>
     </div>
   </section>
-</div>
+</section>
 
 <section class="table-panel">
   <div class="section-head">
     <div>
-      <h2>📋 Quiz Catalog</h2>
-      <p class="meta">Manage drafts, live quizzes, archive state, and release windows.</p>
+      <h2>Quiz Catalog</h2>
+      <p class="meta">Filter the catalog, then open a quiz to manage its lifecycle, schedule, and recent attempt activity.</p>
     </div>
     <span class="badge active">{{ quiz_catalog.pagination.total_items }} quizzes</span>
   </div>
@@ -114,6 +109,15 @@
         <input id="quiz_q" type="text" name="quiz_q" value="{{ quiz_filters.query or '' }}" placeholder="Quiz title, ID, or description">
       </div>
       <div class="field-group">
+        <label for="quiz_lifecycle_status">Lifecycle</label>
+        <select id="quiz_lifecycle_status" name="quiz_lifecycle_status">
+          <option value="">All statuses</option>
+          {% for option in lifecycle_status_options %}
+            <option value="{{ option }}" {% if quiz_filters.lifecycle_status == option %}selected{% endif %}>{{ option|title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field-group">
         <label for="quiz_page_size">Rows per page</label>
         <select id="quiz_page_size" name="quiz_page_size">
           {% for page_size in [10, 25, 50, 100] %}
@@ -125,7 +129,7 @@
         <label>&nbsp;</label>
         <div class="toolbar-actions">
           <button type="submit" class="small">Apply</button>
-          <a class="button secondary small" href="{{ query_url(request, quiz_q=None, quiz_page=1) }}">Reset</a>
+          <a class="button secondary small" href="{{ query_url(request, quiz_q=None, quiz_lifecycle_status=None, quiz_page=1) }}">Reset</a>
         </div>
       </div>
     </div>
@@ -135,22 +139,24 @@
       <thead>
         <tr>
           <th>Quiz</th>
-          <th>Lifecycle</th>
+          <th>Status</th>
           <th>Window</th>
           <th>Duration</th>
-          <th>Description</th>
-          <th>Actions</th>
+          <th>Manage</th>
         </tr>
       </thead>
       <tbody>
         {% for quiz in quiz_catalog.items %}
           <tr>
             <td data-label="Quiz">
-              <strong>{{ quiz.title }}</strong>
+              <strong><a class="text-link" href="/app/admin/quizzes/{{ quiz.quiz_id }}">{{ quiz.title }}</a></strong>
+              {% if quiz.description %}
+                <div class="meta quiz-catalog-copy">{{ quiz.description }}</div>
+              {% endif %}
               <div class="meta mono">{{ quiz.quiz_id }}</div>
               <div class="meta">Created {{ quiz.created_at|datetime }}</div>
             </td>
-            <td data-label="Lifecycle">
+            <td data-label="Status">
               <span class="badge {% if quiz.lifecycle_status == 'published' %}active{% elif quiz.lifecycle_status == 'draft' %}pending{% elif quiz.lifecycle_status == 'archived' %}expired{% endif %}">
                 {{ quiz.lifecycle_status|title }}
               </span>
@@ -175,39 +181,20 @@
               {% endif %}
             </td>
             <td data-label="Duration">{{ quiz.duration_seconds|duration }}</td>
-            <td data-label="Description">{{ quiz.description or "—" }}</td>
-            <td data-label="Actions">
-              <form method="post" action="/app/admin/quizzes/{{ quiz.quiz_id }}/settings" class="stack">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-                <input type="hidden" name="next_url" value="{{ query_url(request) }}">
-                <div class="field-group">
-                  <label for="lifecycle_{{ loop.index }}">Status</label>
-                  <select id="lifecycle_{{ loop.index }}" name="lifecycle_status">
-                    {% for option in lifecycle_status_options %}
-                      <option value="{{ option }}" {% if quiz.lifecycle_status == option %}selected{% endif %}>{{ option|title }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="field-group">
-                  <label for="start_{{ loop.index }}">Opens at ({{ local_timezone_label() }})</label>
-                  <input id="start_{{ loop.index }}" name="availability_start_at" type="datetime-local" value="{{ quiz.availability_start_at|datetime_local }}">
-                </div>
-                <div class="field-group">
-                  <label for="end_{{ loop.index }}">Closes at ({{ local_timezone_label() }})</label>
-                  <input id="end_{{ loop.index }}" name="availability_end_at" type="datetime-local" value="{{ quiz.availability_end_at|datetime_local }}">
-                </div>
-                <button type="submit" class="small">Save</button>
-                </form>
-                <form method="post" action="/app/admin/quizzes/{{ quiz.quiz_id }}/delete" class="stack" onsubmit="return confirm('Delete this quiz? This cannot be undone.');">
+            <td data-label="Manage">
+              <div class="admin-row-actions">
+                <a class="button secondary small" href="/app/admin/quizzes/{{ quiz.quiz_id }}">Manage</a>
+                <form method="post" action="/app/admin/quizzes/{{ quiz.quiz_id }}/delete" class="admin-inline-form" onsubmit="return confirm('Delete this quiz? This cannot be undone.');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                   <input type="hidden" name="next_url" value="{{ query_url(request) }}">
                   <button type="submit" class="button small ghost">Delete</button>
                 </form>
-              </td>
-            </tr>
+              </div>
+            </td>
+          </tr>
         {% else %}
           <tr>
-            <td colspan="6" class="meta">No quizzes match the current filters.</td>
+            <td colspan="5" class="meta">No quizzes match the current filters.</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -240,8 +227,8 @@
 <section class="table-panel">
   <div class="section-head">
     <div>
-      <h2>📈 Quiz Performance</h2>
-      <p class="meta">High-level performance by published test series.</p>
+      <h2>Performance Snapshot</h2>
+      <p class="meta">Published quiz reporting stays separate from the operational catalog.</p>
     </div>
     <span class="badge scored">{{ quiz_performance.pagination.total_items }} analytics rows</span>
   </div>
@@ -249,6 +236,7 @@
     <input type="hidden" name="quiz_page" value="{{ quiz_catalog.pagination.page }}">
     <input type="hidden" name="quiz_page_size" value="{{ quiz_filters.page_size }}">
     <input type="hidden" name="quiz_q" value="{{ quiz_filters.query or '' }}">
+    <input type="hidden" name="quiz_lifecycle_status" value="{{ quiz_filters.lifecycle_status or '' }}">
     <div class="filters-grid">
       <div class="field-group">
         <label for="performance_q">Search analytics</label>
@@ -287,7 +275,7 @@
         {% for row in quiz_performance.items %}
           <tr>
             <td data-label="Quiz">
-              <strong>{{ row.title }}</strong>
+              <strong><a class="text-link" href="/app/admin/quizzes/{{ row.quiz_id }}">{{ row.title }}</a></strong>
               <div class="meta mono">{{ row.quiz_id }}</div>
               <div class="meta">{{ row.duration_seconds|duration }}</div>
             </td>

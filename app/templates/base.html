@@ -1069,6 +1069,159 @@
       max-width: 44ch;
     }
 
+    body[class~="admin-page"] .brand-block .meta {
+      display: none;
+    }
+
+    body[class~="admin-page"] .topbar {
+      align-items: center;
+    }
+
+    body[class~="admin-page"] .topbar .nav a[href="/app/admin"] {
+      display: none;
+    }
+
+    body[class~="admin-page"] .admin-nav-shell h2 {
+      margin-bottom: 0;
+    }
+
+    body[class~="admin-overview-page"] .hero-grid {
+      grid-template-columns: 1fr;
+    }
+
+    body[class~="admin-overview-page"] .hero h1 {
+      font-size: clamp(2.8rem, 5.4vw, 4.4rem);
+      max-width: 10ch;
+    }
+
+    body[class~="admin-overview-page"] .hero-lead {
+      max-width: 48ch;
+    }
+
+    body[class~="admin-quizzes-page"] .hero-grid {
+      grid-template-columns: minmax(0, 1.12fr) minmax(280px, 0.88fr);
+    }
+
+    body[class~="admin-quizzes-page"] .hero h1,
+    body[class~="admin-quiz-detail-page"] .hero h1 {
+      font-size: clamp(2.8rem, 5.2vw, 4.4rem);
+      max-width: 10ch;
+    }
+
+    body[class~="admin-quizzes-page"] .hero-lead,
+    body[class~="admin-quiz-detail-page"] .hero-lead {
+      max-width: 52ch;
+    }
+
+    body[class~="admin-overview-page"] .grid {
+      align-items: start;
+    }
+
+    body[class~="admin-overview-page"] .list-card h2,
+    body[class~="admin-overview-page"] .admin-module-card h2,
+    body[class~="admin-quizzes-page"] .list-card h2,
+    body[class~="admin-quizzes-page"] .card h2,
+    body[class~="admin-quiz-detail-page"] .card h2 {
+      font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+      margin-bottom: 0;
+    }
+
+    .admin-module-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .admin-module-card {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      justify-content: space-between;
+    }
+
+    .admin-preview-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .admin-preview-main,
+    .admin-preview-meta {
+      min-width: 0;
+    }
+
+    .admin-preview-main {
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .admin-preview-meta {
+      display: grid;
+      gap: 0.35rem;
+      justify-items: end;
+      text-align: right;
+    }
+
+    .quiz-catalog-copy {
+      max-width: 46ch;
+      margin-top: 0.35rem;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+
+    .admin-row-actions {
+      display: grid;
+      gap: 0.65rem;
+      min-width: 132px;
+    }
+
+    .admin-inline-form {
+      margin: 0;
+    }
+
+    .admin-inline-form button {
+      width: 100%;
+    }
+
+    .admin-detail-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(300px, 0.88fr);
+      gap: 1.25rem;
+      align-items: start;
+      margin-bottom: 1.25rem;
+    }
+
+    .admin-fact-list {
+      display: grid;
+      gap: 0;
+    }
+
+    .admin-fact {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: flex-start;
+      padding: 0.9rem 0;
+      border-bottom: 1px solid rgba(26, 36, 48, 0.08);
+    }
+
+    .admin-fact:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .danger-zone {
+      display: grid;
+      gap: 0.85rem;
+      margin-top: 1.1rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(26, 36, 48, 0.08);
+    }
+
     .form-note {
       padding: 0.95rem 1rem;
       border-left: 4px solid var(--accent);
@@ -1744,6 +1897,24 @@
 
       body[class~="auth-page"] .auth-aside {
         display: none;
+      }
+
+      body[class~="admin-quizzes-page"] .hero-grid,
+      .admin-detail-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .admin-preview-item {
+        grid-template-columns: 1fr;
+      }
+
+      .admin-preview-meta {
+        justify-items: start;
+        text-align: left;
+      }
+
+      .admin-row-actions {
+        min-width: 0;
       }
     }
 
