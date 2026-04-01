@@ -1040,6 +1040,14 @@
       gap: 1.3rem;
     }
 
+    body[class~="auth-page"] .brand-block .meta {
+      display: none;
+    }
+
+    body[class~="auth-page"] .topbar {
+      align-items: center;
+    }
+
     .form-note {
       padding: 0.95rem 1rem;
       border-left: 4px solid var(--accent);
@@ -1619,6 +1627,15 @@
       .attempt-sidebar {
         position: static;
       }
+
+      body[class~="auth-page"] .auth-layout {
+        min-height: auto;
+      }
+
+      body[class~="auth-page"] .auth-panel {
+        order: -1;
+        align-content: start;
+      }
     }
 
     @media (max-width: 760px) {
@@ -1694,6 +1711,18 @@
         right: 12px;
         bottom: 12px;
         max-width: none;
+      }
+
+      body[class~="auth-page"] .topbar .nav {
+        display: none;
+      }
+
+      body[class~="auth-page"] .auth-layout {
+        gap: 0;
+      }
+
+      body[class~="auth-page"] .auth-aside {
+        display: none;
       }
     }
 

@@ -1,37 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Register{% endblock %}
+{% block body_class %}auth-page{% endblock %}
 {% block content %}
 <div class="auth-layout">
   <section class="auth-aside">
     <span class="eyebrow">Student Registration</span>
-    <h1>Create your student account</h1>
-    <p class="hero-lead">Use one account for all available test series, attempts, and results.</p>
-    <div class="detail-grid" style="margin-top: 24px;">
-      <div class="detail-tile">
-        <div class="meta">Identity</div>
-        <strong>Use your real name and email</strong>
-      </div>
-      <div class="detail-tile">
-        <div class="meta">Access</div>
-        <strong>One account across all tests</strong>
-      </div>
-      <div class="detail-tile">
-        <div class="meta">Results</div>
-        <strong>Return to scored results anytime</strong>
-      </div>
-    </div>
-    <div class="pill-row" style="margin-top: 24px;">
-      <span class="pill">Quick setup</span>
-      <span class="pill">Secure account</span>
-      <span class="pill">Free access</span>
-    </div>
+    <h1>Create your student account.</h1>
+    <p class="hero-lead">One account gives you access to tests, attempts, and results.</p>
   </section>
 
   <section class="auth-panel">
     <div>
-      <span class="eyebrow">Get Started</span>
       <h2>Register</h2>
-      <p class="meta">Create your student account, then sign in to start available tests.</p>
     </div>
     {% if allow_registration %}
       <form method="post" action="/app/register" class="stack">
@@ -49,10 +29,10 @@
           <input id="password" name="password" type="password" placeholder="Minimum 8 characters" minlength="8" required autocomplete="new-password">
         </div>
         <button type="submit">Create Account →</button>
-      <div class="form-note">
-        Already registered? <a href="/app/login" class="text-link">Sign in here</a>
-      </div>
-    </form>
+        <div class="form-note">
+          Already registered? <a href="/app/login" class="text-link">Sign in</a>
+        </div>
+      </form>
     {% else %}
       <div class="empty-state">
         <strong>Registration Closed</strong>
