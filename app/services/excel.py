@@ -1,7 +1,10 @@
 from io import BytesIO
 from pathlib import Path
 
-from openpyxl import load_workbook
+try:
+    from openpyxl import load_workbook
+except ModuleNotFoundError:  # pragma: no cover - environment-dependent import guard
+    load_workbook = None
 
 from app.schemas.quiz import QuizDefinition
 from app.utils.time import coerce_epoch
@@ -14,6 +17,8 @@ def slugify(value: str) -> str:
 
 
 def parse_quiz_workbook(content: bytes, filename: str | None = None) -> QuizDefinition:
+    if load_workbook is None:
+        raise RuntimeError("Excel import requires the optional dependency 'openpyxl'")
     workbook = load_workbook(BytesIO(content), data_only=True)
     metadata_sheet = _find_sheet(workbook, "metadata")
     questions_sheet = _find_sheet(workbook, "questions")

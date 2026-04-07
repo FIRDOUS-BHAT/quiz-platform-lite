@@ -53,6 +53,21 @@ class AdminStudentRecord(BaseModel):
     best_percentage: float | None = Field(default=None, ge=0, le=100)
 
 
+class AdminAuditLogRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    audit_id: str
+    entity_type: str
+    entity_id: str
+    user_id: str | None = None
+    actor_user_id: str | None = None
+    event_type: str
+    summary: str
+    request_id: str | None = None
+    raw_data: dict[str, object] | None = None
+    created_at: int = Field(gt=0)
+
+
 class AdminParticipationRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

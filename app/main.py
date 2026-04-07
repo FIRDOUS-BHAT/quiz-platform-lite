@@ -4,6 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 from urllib.parse import urlencode
+from urllib.parse import urlparse
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -13,6 +14,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import settings
 from app.middleware import LimitUploadSize
@@ -48,6 +50,27 @@ else:
 logger = logging.getLogger(__name__)
 
 
+def _content_security_policy() -> str:
+    form_action_sources = ["'self'"]
+    if settings.payu_payment_url:
+        parsed = urlparse(settings.payu_payment_url)
+        if parsed.scheme and parsed.netloc:
+            form_action_sources.append(f"{parsed.scheme}://{parsed.netloc}")
+    return "; ".join(
+        [
+            "default-src 'self'",
+            "img-src 'self' data: https:",
+            "style-src 'self' 'unsafe-inline'",
+            "script-src 'self' 'unsafe-inline'",
+            "font-src 'self' data:",
+            "connect-src 'self'",
+            f"form-action {' '.join(form_action_sources)}",
+            "base-uri 'self'",
+            "frame-ancestors 'none'",
+        ]
+    )
+
+
 def _auth_redirect_response(request: Request, exc: StarletteHTTPException) -> RedirectResponse | None:
     if exc.status_code != status.HTTP_401_UNAUTHORIZED:
         return None
@@ -69,10 +92,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
+        response.headers["Content-Security-Policy"] = _content_security_policy()
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         if settings.secure_cookies:
             response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
         return response
@@ -189,6 +217,9 @@ if settings.parsed_cors_origins:
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["*"],
     )
+
+if settings.parsed_trusted_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.parsed_trusted_hosts)
 
 app.include_router(web.router)
 app.include_router(quiz.router)

@@ -404,6 +404,7 @@ async def register_page(request: Request, store=Depends(get_store)) -> HTMLRespo
 
 @router.post("/app/register", dependencies=[Depends(rate_limit_register)])
 async def register_submit(
+    request: Request,
     full_name: str = Form(...),
     father_name: str = Form(...),
     mother_name: str = Form(...),
@@ -423,7 +424,7 @@ async def register_submit(
             mobile_number=mobile_number,
             email=email,
         )
-        await store.create_paid_student_registration(payload)
+        await store.create_paid_student_registration(payload, request_id=getattr(request.state, "request_id", None))
     except Exception as exc:
         if payload is not None and "Complete the payment to confirm your candidature." in str(exc):
             payment_params = urlencode({"payment_ready": "yes", "registered_email": payload.email})
@@ -723,6 +724,7 @@ async def admin_student_detail(
             admin_section="students",
             student=None,
             student_attempts=None,
+            audit_logs=[],
             quizzes=await store.list_quizzes_for_admin(),
             attempt_filters={
                 "query": attempt_q,
@@ -743,6 +745,7 @@ async def admin_student_detail(
         attempt_status=attempt_status,
         user_id=user_id,
     )
+    audit_logs = await store.list_audit_logs_for_entity(entity_type="user", entity_id=user_id, limit=20)
     return _render_admin(
         request,
         "admin_student_detail.html",
@@ -750,6 +753,7 @@ async def admin_student_detail(
         admin_section="students",
         student=student,
         student_attempts=student_attempts,
+        audit_logs=audit_logs,
         quizzes=await store.list_quizzes_for_admin(),
         attempt_filters={
             "query": attempt_q,
@@ -765,20 +769,25 @@ async def admin_student_detail(
 
 @router.post("/app/admin/students/{user_id}/payment-status")
 async def admin_student_payment_status_submit(
+    request: Request,
     user_id: str,
     payment_status: str = Form(...),
     next_url: str | None = Form(None),
     current_user: UserSession = Depends(get_current_admin),
     store=Depends(get_store),
 ) -> RedirectResponse:
-    del current_user
     return_url = _safe_admin_student_return_url(next_url)
     normalized_status = _normalized_text(payment_status)
     if normalized_status not in {status.value for status in PaymentStatus}:
         return _redirect(return_url, "Invalid payment status", "error")
 
     target_status = PaymentStatus(normalized_status)
-    updated = await store.update_student_payment_status(user_id, target_status)
+    updated = await store.update_student_payment_status(
+        user_id,
+        target_status,
+        actor_user_id=current_user.user_id,
+        request_id=getattr(request.state, "request_id", None),
+    )
     if not updated:
         return _redirect(return_url, "Student not found", "error")
 

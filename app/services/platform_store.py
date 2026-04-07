@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
 from app.config import settings
-from app.models import Attempt, Quiz, Result, SessionToken, User
+from app.models import AuditLog, Attempt, Quiz, Result, SessionToken, User
 from app.schemas.auth import (
     PaymentStatus,
     PaidRegistrationRequest,
@@ -18,6 +18,7 @@ from app.schemas.auth import (
     UserSession,
 )
 from app.schemas.platform import (
+    AdminAuditLogRecord,
     AdminParticipationPage,
     AdminParticipationRecord,
     AdminQuizPage,
@@ -41,6 +42,34 @@ from app.utils.time import epoch_to_local_iso, local_timezone_name, utc_now_epoc
 class PlatformStore:
     def __init__(self, session_factory: DatabaseSessionFactory):
         self.session_factory = session_factory
+
+    def _add_audit_log(
+        self,
+        session,
+        *,
+        entity_type: str,
+        entity_id: str,
+        event_type: str,
+        summary: str,
+        user_id: str | None = None,
+        actor_user_id: str | None = None,
+        request_id: str | None = None,
+        raw_data: dict[str, Any] | None = None,
+    ) -> None:
+        session.add(
+            AuditLog(
+                audit_id=uuid.uuid4().hex,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                user_id=user_id,
+                actor_user_id=actor_user_id,
+                event_type=event_type,
+                summary=summary,
+                request_id=request_id,
+                raw_data=raw_data,
+                created_at=utc_now_epoch(),
+            )
+        )
 
     async def create_user(
         self,
@@ -79,7 +108,12 @@ class PlatformStore:
                 access_status=UserAccessStatus(user.access_status),
             )
 
-    async def create_paid_student_registration(self, payload: PaidRegistrationRequest) -> UserSession:
+    async def create_paid_student_registration(
+        self,
+        payload: PaidRegistrationRequest,
+        *,
+        request_id: str | None = None,
+    ) -> UserSession:
         user_id = uuid.uuid4().hex
         email = normalize_email(payload.email)
         created_at = utc_now_epoch()
@@ -119,6 +153,20 @@ class PlatformStore:
                 created_at=created_at,
             )
             session.add(user)
+            self._add_audit_log(
+                session,
+                entity_type="user",
+                entity_id=user.user_id,
+                user_id=user.user_id,
+                event_type="registration_submitted",
+                summary="Candidate registration submitted",
+                request_id=request_id,
+                raw_data={
+                    "email": user.email,
+                    "payment_status": user.payment_status,
+                    "access_status": user.access_status,
+                },
+            )
             return UserSession(
                 user_id=user.user_id,
                 email=user.email,
@@ -188,7 +236,14 @@ class PlatformStore:
                 access_status=UserAccessStatus(user.access_status),
             )
 
-    async def update_student_payment_status(self, user_id: str, payment_status: PaymentStatus) -> bool:
+    async def update_student_payment_status(
+        self,
+        user_id: str,
+        payment_status: PaymentStatus,
+        *,
+        actor_user_id: str | None = None,
+        request_id: str | None = None,
+    ) -> bool:
         async with self.session_factory.begin() as session:
             user = (
                 await session.execute(
@@ -199,8 +254,53 @@ class PlatformStore:
             ).scalar_one_or_none()
             if user is None:
                 return False
+            previous_status = user.payment_status
             user.payment_status = payment_status.value
+            if previous_status != payment_status.value:
+                self._add_audit_log(
+                    session,
+                    entity_type="user",
+                    entity_id=user.user_id,
+                    user_id=user.user_id,
+                    actor_user_id=actor_user_id,
+                    event_type="payment_status_changed",
+                    summary=f"Payment status changed from {previous_status} to {payment_status.value}",
+                    request_id=request_id,
+                    raw_data={
+                        "previous_status": previous_status,
+                        "current_status": payment_status.value,
+                    },
+                )
             return True
+
+    async def list_audit_logs_for_entity(
+        self,
+        *,
+        entity_type: str,
+        entity_id: str,
+        limit: int = 20,
+    ) -> list[AdminAuditLogRecord]:
+        async with self.session_factory() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        AuditLog.audit_id,
+                        AuditLog.entity_type,
+                        AuditLog.entity_id,
+                        AuditLog.user_id,
+                        AuditLog.actor_user_id,
+                        AuditLog.event_type,
+                        AuditLog.summary,
+                        AuditLog.request_id,
+                        AuditLog.raw_data,
+                        AuditLog.created_at,
+                    )
+                    .where(AuditLog.entity_type == entity_type, AuditLog.entity_id == entity_id)
+                    .order_by(AuditLog.created_at.desc())
+                    .limit(limit)
+                )
+            ).all()
+            return [AdminAuditLogRecord.model_validate(dict(row._mapping)) for row in rows]
 
     async def create_quiz(
         self,

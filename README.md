@@ -5,6 +5,7 @@
 It keeps the same institute-facing product shape:
 - student login, dashboard, attempts, and results
 - admin login, quiz upload, scheduling, and monitoring
+- registration and payment-state audit logging
 - Postgres-backed attempts and results
 
 It removes the expensive distributed pieces from the original project:
@@ -53,6 +54,7 @@ BOOTSTRAP_ADMIN_PASSWORD=replace-me
 APP_TIMEZONE=Asia/Kolkata
 SECURE_COOKIES=true
 ENVIRONMENT=production
+TRUSTED_HOSTS=your-domain.example,localhost
 ```
 
 3. Start the stack.
@@ -79,6 +81,24 @@ docker compose logs -f app    # stream app logs to check readiness
 
 - `http://localhost:8000/app`
 - `http://localhost:8000/app/admin/login`
+
+## Database Migrations
+
+Alembic is now included for schema management:
+
+```bash
+alembic upgrade head
+```
+
+For older environments, the app still keeps a compatibility startup schema initializer, but Alembic should be the primary deployment path going forward.
+
+## Tests
+
+Run the registration and payment workflow tests with:
+
+```bash
+pytest
+```
 
 ## Seeding a Quiz
 

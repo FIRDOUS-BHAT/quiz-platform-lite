@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     csrf_secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     secure_cookies: bool = False  # Set True in production (HTTPS)
     cors_allowed_origins: str = ""  # Comma-separated origins, empty = same-origin only
+    trusted_hosts: str = ""  # Comma-separated hostnames, empty = disabled
 
     # Rate Limiting (per IP, per minute)
     rate_limit_login: int = Field(default=10, ge=1)
@@ -67,6 +68,14 @@ class Settings(BaseSettings):
         )
 
     @property
+    def sqlalchemy_sync_database_url(self) -> str:
+        return (
+            "postgresql://"
+            f"{quote_plus(self.postgres_user)}:{quote_plus(self.postgres_password)}"
+            f"@{self.postgres_host}:{self.postgres_port}/{quote_plus(self.postgres_db)}"
+        )
+
+    @property
     def is_production(self) -> bool:
         return self.environment.lower() in ("production", "prod")
 
@@ -75,6 +84,12 @@ class Settings(BaseSettings):
         if not self.cors_allowed_origins:
             return []
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def parsed_trusted_hosts(self) -> list[str]:
+        if not self.trusted_hosts:
+            return []
+        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
 
 
 settings = Settings()

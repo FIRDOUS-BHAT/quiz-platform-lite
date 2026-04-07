@@ -137,6 +137,39 @@
   <section class="table-panel">
     <div class="section-head">
       <div>
+        <h2>🧾 Recent Activity</h2>
+        <p class="meta">Track registration and payment status changes for this candidate.</p>
+      </div>
+      <span class="badge">{{ audit_logs|length }} events</span>
+    </div>
+    <div class="summary-list">
+      {% for entry in audit_logs %}
+        <div class="summary-item admin-preview-item">
+          <div class="admin-preview-main">
+            <strong>{{ entry.summary }}</strong>
+            <div class="meta mono">{{ entry.event_type }}</div>
+            {% if entry.request_id %}
+              <div class="meta mono">Request ID {{ entry.request_id }}</div>
+            {% endif %}
+          </div>
+          <div class="admin-preview-meta">
+            <div class="meta">{{ entry.created_at|datetime }}</div>
+            {% if entry.raw_data and entry.raw_data.get("previous_status") and entry.raw_data.get("current_status") %}
+              <div class="meta">{{ entry.raw_data.get("previous_status") }} → {{ entry.raw_data.get("current_status") }}</div>
+            {% endif %}
+          </div>
+        </div>
+      {% else %}
+        <div class="empty-state">
+          No audit events recorded yet for this student.
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="table-panel">
+    <div class="section-head">
+      <div>
         <h2>⏱ Attempt History</h2>
         <p class="meta">Filter the selected student's attempts by quiz, status, or search text.</p>
       </div>

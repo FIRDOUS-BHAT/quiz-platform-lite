@@ -139,3 +139,18 @@ class Result(Base):
     evaluated_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
     submission_id: Mapped[str | None] = mapped_column(String(128))
     raw_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    audit_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    entity_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    actor_user_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    request_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
