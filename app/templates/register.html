@@ -50,23 +50,23 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
         <div>
           <label for="full_name">Name</label>
-          <input id="full_name" name="full_name" type="text" placeholder="John Doe" required autocomplete="name">
+          <input id="full_name" name="full_name" type="text" placeholder="John Doe" required minlength="2" maxlength="256" autocomplete="name" autocapitalize="words" spellcheck="false" title="Enter at least 2 characters using letters, spaces, apostrophes, periods, or hyphens.">
         </div>
         <div>
           <label for="father_name">Father's Name</label>
-          <input id="father_name" name="father_name" type="text" placeholder="Father's name" required>
+          <input id="father_name" name="father_name" type="text" placeholder="Father's name" required minlength="2" maxlength="256" autocapitalize="words" spellcheck="false" title="Enter at least 2 characters using letters, spaces, apostrophes, periods, or hyphens.">
         </div>
         <div>
           <label for="mother_name">Mother's Name</label>
-          <input id="mother_name" name="mother_name" type="text" placeholder="Mother's name" required>
+          <input id="mother_name" name="mother_name" type="text" placeholder="Mother's name" required minlength="2" maxlength="256" autocapitalize="words" spellcheck="false" title="Enter at least 2 characters using letters, spaces, apostrophes, periods, or hyphens.">
         </div>
         <div>
           <label for="mobile_number">Mobile Number</label>
-          <input id="mobile_number" name="mobile_number" type="tel" placeholder="9876543210" required autocomplete="tel" inputmode="tel">
+          <input id="mobile_number" name="mobile_number" type="tel" placeholder="9876543210" required minlength="10" maxlength="20" pattern="\+?[0-9()\-\s]{10,20}" autocomplete="tel" inputmode="tel" title="Enter 10 to 15 digits. Spaces, parentheses, hyphens, and a leading + are allowed.">
         </div>
         <div>
           <label for="email">Email ID</label>
-          <input id="email" name="email" type="email" placeholder="you@example.com" required autocomplete="email">
+          <input id="email" name="email" type="email" placeholder="you@example.com" required maxlength="320" autocomplete="email" autocapitalize="none" spellcheck="false">
         </div>
         <button type="submit">Submit Registration →</button>
         <div class="form-note">
@@ -85,4 +85,132 @@
     {% endif %}
   </section>
 </div>
+<script>
+  (function () {
+    var form = document.querySelector('form[action="/app/register"]');
+    if (!form) return;
+
+    var nameInputs = [
+      { element: document.getElementById("full_name"), label: "name" },
+      { element: document.getElementById("father_name"), label: "father's name" },
+      { element: document.getElementById("mother_name"), label: "mother's name" }
+    ];
+    var mobileInput = document.getElementById("mobile_number");
+    var emailInput = document.getElementById("email");
+    function normalizeSpaces(value) {
+      return value.trim().replace(/\s+/g, " ");
+    }
+
+    function isLetter(char) {
+      return char.toLowerCase() !== char.toUpperCase();
+    }
+
+    function validateName(input, label) {
+      if (!input) return true;
+      var value = normalizeSpaces(input.value);
+      input.value = value;
+      if (!value) {
+        input.setCustomValidity("Please enter " + label + ".");
+        return false;
+      }
+      if (value.length < 2) {
+        input.setCustomValidity(label.charAt(0).toUpperCase() + label.slice(1) + " must be at least 2 characters long.");
+        return false;
+      }
+      if (/^[ .'-]/.test(value) || /[ .'-]$/.test(value)) {
+        input.setCustomValidity(label.charAt(0).toUpperCase() + label.slice(1) + " must start and end with a letter.");
+        return false;
+      }
+      if (!Array.from(value).some(isLetter)) {
+        input.setCustomValidity(label.charAt(0).toUpperCase() + label.slice(1) + " must include at least one letter.");
+        return false;
+      }
+      if (!Array.from(value).every(function (char) {
+        return isLetter(char) || char === " " || char === "." || char === "'" || char === "-";
+      })) {
+        input.setCustomValidity(label.charAt(0).toUpperCase() + label.slice(1) + " can only contain letters, spaces, apostrophes, periods, and hyphens.");
+        return false;
+      }
+      input.setCustomValidity("");
+      return true;
+    }
+
+    function validateMobile() {
+      if (!mobileInput) return true;
+      var value = mobileInput.value.trim();
+      var digits = value.replace(/\D/g, "");
+      if (!value) {
+        mobileInput.setCustomValidity("Please enter a mobile number.");
+        return false;
+      }
+      if (!/^[0-9()+\-\s]+$/.test(value)) {
+        mobileInput.setCustomValidity("Mobile number can only contain digits, spaces, parentheses, hyphens, and a leading +.");
+        return false;
+      }
+      if (value.indexOf("+") > 0 || (value.match(/\+/g) || []).length > 1) {
+        mobileInput.setCustomValidity("Mobile number can only use + at the beginning.");
+        return false;
+      }
+      if (digits.length < 10 || digits.length > 15) {
+        mobileInput.setCustomValidity("Mobile number must contain 10 to 15 digits.");
+        return false;
+      }
+      mobileInput.setCustomValidity("");
+      return true;
+    }
+
+    function validateEmail() {
+      if (!emailInput) return true;
+      emailInput.value = emailInput.value.trim().toLowerCase();
+      if (!emailInput.value) {
+        emailInput.setCustomValidity("Please enter an email address.");
+        return false;
+      }
+      emailInput.setCustomValidity("");
+      return true;
+    }
+
+    nameInputs.forEach(function (entry) {
+      if (!entry.element) return;
+      entry.element.addEventListener("input", function () {
+        entry.element.setCustomValidity("");
+      });
+      entry.element.addEventListener("blur", function () {
+        validateName(entry.element, entry.label);
+      });
+    });
+
+    if (mobileInput) {
+      mobileInput.addEventListener("input", function () {
+        mobileInput.setCustomValidity("");
+      });
+      mobileInput.addEventListener("blur", validateMobile);
+    }
+
+    if (emailInput) {
+      emailInput.addEventListener("input", function () {
+        emailInput.setCustomValidity("");
+      });
+      emailInput.addEventListener("blur", validateEmail);
+    }
+
+    form.addEventListener("submit", function (event) {
+      var isValid = true;
+      nameInputs.forEach(function (entry) {
+        if (entry.element && !validateName(entry.element, entry.label)) {
+          isValid = false;
+        }
+      });
+      if (!validateMobile()) {
+        isValid = false;
+      }
+      if (!validateEmail()) {
+        isValid = false;
+      }
+      if (!isValid) {
+        event.preventDefault();
+      }
+    });
+  }());
+</script>
 {% endblock %}

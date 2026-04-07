@@ -82,6 +82,11 @@ async def initialize_schema(engine: AsyncEngine) -> None:
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS lifecycle_status TEXT NOT NULL DEFAULT 'published';",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS availability_start_at BIGINT;",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS availability_end_at BIGINT;",
+        "UPDATE users SET email = lower(btrim(email)) WHERE email IS NOT NULL;",
+        "UPDATE users SET full_name = btrim(regexp_replace(full_name, '[[:space:]]+', ' ', 'g')) WHERE full_name IS NOT NULL;",
+        "UPDATE users SET father_name = NULLIF(btrim(regexp_replace(father_name, '[[:space:]]+', ' ', 'g')), '') WHERE father_name IS NOT NULL;",
+        "UPDATE users SET mother_name = NULLIF(btrim(regexp_replace(mother_name, '[[:space:]]+', ' ', 'g')), '') WHERE mother_name IS NOT NULL;",
+        "UPDATE users SET mobile_number = NULLIF(regexp_replace(mobile_number, '[^0-9]', '', 'g'), '') WHERE mobile_number IS NOT NULL;",
         "UPDATE users SET access_status = 'active' WHERE access_status IS NULL OR access_status = '';",
         "UPDATE users SET payment_status = 'confirmed' WHERE payment_status IS NULL OR payment_status = '';",
         "UPDATE quizzes SET lifecycle_status = 'published' WHERE lifecycle_status IS NULL OR lifecycle_status = '';",
@@ -89,6 +94,75 @@ async def initialize_schema(engine: AsyncEngine) -> None:
         "ALTER TABLE results ADD COLUMN IF NOT EXISTS attempt_id TEXT;",
         "ALTER TABLE results ADD COLUMN IF NOT EXISTS percentage DOUBLE PRECISION;",
         "ALTER TABLE results ADD COLUMN IF NOT EXISTS submission_id TEXT;",
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_users_email_valid') THEN
+                ALTER TABLE users
+                ADD CONSTRAINT ck_users_email_valid
+                CHECK (email = lower(btrim(email)) AND email ~ '^[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{2,}$') NOT VALID;
+            END IF;
+        END $$;
+        """,
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_users_full_name_valid') THEN
+                ALTER TABLE users
+                ADD CONSTRAINT ck_users_full_name_valid
+                CHECK (
+                    char_length(full_name) BETWEEN 2 AND 256
+                    AND full_name = btrim(full_name)
+                    AND full_name !~ '[0-9]'
+                    AND full_name !~ ' {2,}'
+                ) NOT VALID;
+            END IF;
+        END $$;
+        """,
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_users_father_name_valid') THEN
+                ALTER TABLE users
+                ADD CONSTRAINT ck_users_father_name_valid
+                CHECK (
+                    father_name IS NULL OR (
+                        char_length(father_name) BETWEEN 2 AND 256
+                        AND father_name = btrim(father_name)
+                        AND father_name !~ '[0-9]'
+                        AND father_name !~ ' {2,}'
+                    )
+                ) NOT VALID;
+            END IF;
+        END $$;
+        """,
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_users_mother_name_valid') THEN
+                ALTER TABLE users
+                ADD CONSTRAINT ck_users_mother_name_valid
+                CHECK (
+                    mother_name IS NULL OR (
+                        char_length(mother_name) BETWEEN 2 AND 256
+                        AND mother_name = btrim(mother_name)
+                        AND mother_name !~ '[0-9]'
+                        AND mother_name !~ ' {2,}'
+                    )
+                ) NOT VALID;
+            END IF;
+        END $$;
+        """,
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_users_mobile_number_valid') THEN
+                ALTER TABLE users
+                ADD CONSTRAINT ck_users_mobile_number_valid
+                CHECK (mobile_number IS NULL OR mobile_number ~ '^[0-9]{10,15}$') NOT VALID;
+            END IF;
+        END $$;
+        """,
         "CREATE INDEX IF NOT EXISTS idx_users_role_created_at ON users(role, created_at DESC);",
         "CREATE INDEX IF NOT EXISTS idx_users_access_status_created_at ON users(access_status, created_at DESC);",
         "CREATE INDEX IF NOT EXISTS idx_users_mobile_number ON users(mobile_number);",

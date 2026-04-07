@@ -1,17 +1,15 @@
-import re
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from typing_extensions import Annotated
+
+from app.services.auth import normalize_and_validate_email, normalize_person_name, normalize_phone_number
 
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
 PersonName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)]
 EmailAddress = Annotated[str, StringConstraints(strip_whitespace=True, min_length=5, max_length=320)]
 PhoneNumber = Annotated[str, StringConstraints(strip_whitespace=True, min_length=7, max_length=20)]
 PasswordText = Annotated[str, StringConstraints(min_length=8, max_length=256)]
-
-_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-_PHONE_RE = re.compile(r"^[0-9+\-\s()]{7,20}$")
 
 
 class UserRole(str, Enum):
@@ -36,11 +34,15 @@ class RegisterRequest(BaseModel):
     email: EmailAddress
     password: PasswordText
 
-    @model_validator(mode="after")
-    def validate_email(self) -> "RegisterRequest":
-        if not _EMAIL_RE.match(self.email):
-            raise ValueError("email must be a valid address (e.g. user@example.com)")
-        return self
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        return normalize_person_name(value, field_name="name")
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return normalize_and_validate_email(value)
 
 
 class PaidRegistrationRequest(BaseModel):
@@ -52,13 +54,30 @@ class PaidRegistrationRequest(BaseModel):
     mobile_number: PhoneNumber
     email: EmailAddress
 
-    @model_validator(mode="after")
-    def validate_fields(self) -> "PaidRegistrationRequest":
-        if not _EMAIL_RE.match(self.email):
-            raise ValueError("email must be a valid address (e.g. user@example.com)")
-        if not _PHONE_RE.match(self.mobile_number):
-            raise ValueError("mobile number must contain only digits or common phone symbols")
-        return self
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        return normalize_person_name(value, field_name="name")
+
+    @field_validator("father_name")
+    @classmethod
+    def validate_father_name(cls, value: str) -> str:
+        return normalize_person_name(value, field_name="father's name")
+
+    @field_validator("mother_name")
+    @classmethod
+    def validate_mother_name(cls, value: str) -> str:
+        return normalize_person_name(value, field_name="mother's name")
+
+    @field_validator("mobile_number")
+    @classmethod
+    def validate_mobile_number(cls, value: str) -> str:
+        return normalize_phone_number(value)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return normalize_and_validate_email(value)
 
 
 class LoginRequest(BaseModel):
@@ -67,11 +86,10 @@ class LoginRequest(BaseModel):
     email: EmailAddress
     password: PasswordText
 
-    @model_validator(mode="after")
-    def validate_email(self) -> "LoginRequest":
-        if not _EMAIL_RE.match(self.email):
-            raise ValueError("email must be a valid address (e.g. user@example.com)")
-        return self
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return normalize_and_validate_email(value)
 
 
 class UserSession(BaseModel):

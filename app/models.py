@@ -32,6 +32,39 @@ class User(Base):
 
     __table_args__ = (
         CheckConstraint("role IN ('admin', 'student')", name="ck_users_role"),
+        CheckConstraint(
+            "email = lower(btrim(email)) AND email ~ '^[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{2,}$'",
+            name="ck_users_email_valid",
+        ),
+        CheckConstraint(
+            "char_length(full_name) BETWEEN 2 AND 256 "
+            "AND full_name = btrim(full_name) "
+            "AND full_name !~ '[0-9]' "
+            "AND full_name !~ ' {2,}'",
+            name="ck_users_full_name_valid",
+        ),
+        CheckConstraint(
+            "father_name IS NULL OR ("
+            "char_length(father_name) BETWEEN 2 AND 256 "
+            "AND father_name = btrim(father_name) "
+            "AND father_name !~ '[0-9]' "
+            "AND father_name !~ ' {2,}'"
+            ")",
+            name="ck_users_father_name_valid",
+        ),
+        CheckConstraint(
+            "mother_name IS NULL OR ("
+            "char_length(mother_name) BETWEEN 2 AND 256 "
+            "AND mother_name = btrim(mother_name) "
+            "AND mother_name !~ '[0-9]' "
+            "AND mother_name !~ ' {2,}'"
+            ")",
+            name="ck_users_mother_name_valid",
+        ),
+        CheckConstraint(
+            "mobile_number IS NULL OR mobile_number ~ '^[0-9]{10,15}$'",
+            name="ck_users_mobile_number_valid",
+        ),
         CheckConstraint("payment_status IN ('unconfirmed', 'confirmed')", name="ck_users_payment_status"),
         CheckConstraint("access_status IN ('active', 'pending_credentials')", name="ck_users_access_status"),
     )

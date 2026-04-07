@@ -377,9 +377,11 @@ class PlatformStore:
         filters = [User.role == UserRole.STUDENT.value]
         if search_term:
             pattern = f"%{search_term}%"
-            filters.append(
-                or_(User.full_name.ilike(pattern), User.email.ilike(pattern), User.mobile_number.ilike(pattern))
-            )
+            search_filters = [User.full_name.ilike(pattern), User.email.ilike(pattern)]
+            mobile_digits = "".join(char for char in search_term if char.isdigit())
+            if mobile_digits:
+                search_filters.append(User.mobile_number.ilike(f"%{mobile_digits}%"))
+            filters.append(or_(*search_filters))
 
         started_expr = func.count(Attempt.attempt_id)
         submitted_expr = func.coalesce(
