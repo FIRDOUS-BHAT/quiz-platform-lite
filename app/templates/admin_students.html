@@ -6,7 +6,7 @@
     <div>
       <span class="eyebrow">👥 Students</span>
       <h1>Review learners without mixing this table into every other admin task.</h1>
-      <p class="hero-lead">This view stays focused on registration, progress, and performance summaries. Click through to a student profile when you need attempt-level detail.</p>
+      <p class="hero-lead">This view now covers both paid registrations awaiting credentials and active students already participating in scheduled assessments.</p>
     </div>
     <div class="hero-side">
       <div class="hero-panel">
@@ -24,7 +24,7 @@
       </div>
       <div class="hero-panel">
         <div class="muted-strong">💡 Workflow</div>
-        <p class="meta">Search by name or email, then open the student profile to inspect attempt history with quiz and status filters.</p>
+        <p class="meta">Search by name or email, then check access status before opening the student profile for attempt history and scoring details.</p>
       </div>
     </div>
   </div>
@@ -34,7 +34,7 @@
   <div class="section-head">
     <div>
       <h2>📋 Registered Students</h2>
-      <p class="meta">Who is enrolled and how they are progressing through the catalog.</p>
+      <p class="meta">Track who has completed paid registration, who already has credentials, and how active students are progressing.</p>
     </div>
     <span class="badge">{{ students.pagination.total_items }} students</span>
   </div>
@@ -66,6 +66,7 @@
       <thead>
         <tr>
           <th>Student</th>
+          <th>Status</th>
           <th>Started</th>
           <th>Submitted</th>
           <th>Scored</th>
@@ -81,6 +82,13 @@
               <div class="meta">{{ student.email }}</div>
               <div class="meta">Joined {{ student.created_at|datetime }}</div>
             </td>
+            <td data-label="Status">
+              {% if student.access_status.value == "pending_credentials" %}
+                <span class="badge pending">Pending Credentials</span>
+              {% else %}
+                <span class="badge active">Active</span>
+              {% endif %}
+            </td>
             <td data-label="Started">{{ student.quizzes_started }}</td>
             <td data-label="Submitted">{{ student.quizzes_submitted }}</td>
             <td data-label="Scored">{{ student.quizzes_scored }}</td>
@@ -89,7 +97,7 @@
           </tr>
         {% else %}
           <tr>
-            <td colspan="6" class="meta">No students registered yet.</td>
+            <td colspan="7" class="meta">No students registered yet.</td>
           </tr>
         {% endfor %}
       </tbody>

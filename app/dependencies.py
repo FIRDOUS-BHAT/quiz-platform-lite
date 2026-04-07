@@ -2,7 +2,7 @@ from typing import Literal
 
 from fastapi import Depends, HTTPException, Request, status
 
-from app.schemas.auth import UserSession
+from app.schemas.auth import UserAccessStatus, UserSession
 from app.services.db import DatabaseSessionFactory
 
 SessionScope = Literal["student", "admin", "either"]
@@ -95,6 +95,11 @@ async def get_current_user(request: Request, store=Depends(get_store)) -> UserSe
     user = await get_optional_current_user(request, store=store, scope="student")
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    if user.access_status != UserAccessStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Your registration is on file. The exam date and login credentials will be shared by email.",
+        )
     return user
 
 

@@ -16,6 +16,11 @@ class UserRole(str, Enum):
     STUDENT = "student"
 
 
+class UserAccessStatus(str, Enum):
+    ACTIVE = "active"
+    PENDING_CREDENTIALS = "pending_credentials"
+
+
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -25,6 +30,19 @@ class RegisterRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_email(self) -> "RegisterRequest":
+        if not _EMAIL_RE.match(self.email):
+            raise ValueError("email must be a valid address (e.g. user@example.com)")
+        return self
+
+
+class PaidRegistrationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: Identifier
+    email: EmailAddress
+
+    @model_validator(mode="after")
+    def validate_email(self) -> "PaidRegistrationRequest":
         if not _EMAIL_RE.match(self.email):
             raise ValueError("email must be a valid address (e.g. user@example.com)")
         return self
@@ -50,6 +68,7 @@ class UserSession(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    access_status: UserAccessStatus = UserAccessStatus.ACTIVE
 
 
 class AuthResponse(BaseModel):

@@ -113,6 +113,11 @@
           <div class="admin-preview-main">
             <strong><a class="text-link" href="/app/admin/students/{{ student.user_id }}">{{ student.full_name }}</a></strong>
             <div class="meta">{{ student.email }}</div>
+            {% if student.access_status.value == "pending_credentials" %}
+              <span class="badge pending">Pending Credentials</span>
+            {% else %}
+              <span class="badge active">Active</span>
+            {% endif %}
           </div>
           <div class="admin-preview-meta">
             <div class="meta">Joined {{ student.created_at|datetime }}</div>

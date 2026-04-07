@@ -21,6 +21,13 @@
         <p class="hero-lead">{{ student.email }}</p>
         <div class="pill-row">
           <span class="pill">📅 Joined {{ student.created_at|datetime }}</span>
+          <span class="pill">
+            {% if student.access_status.value == "pending_credentials" %}
+              ⏳ Pending credentials
+            {% else %}
+              ✅ Active access
+            {% endif %}
+          </span>
           <span class="pill">🚀 Started {{ student.quizzes_started }}</span>
           <span class="pill">📬 Submitted {{ student.quizzes_submitted }}</span>
           <span class="pill">✅ Scored {{ student.quizzes_scored }}</span>
@@ -33,6 +40,16 @@
         <div class="hero-panel">
           <div class="muted-strong">📈 Performance summary</div>
           <div class="detail-grid" style="margin-top: 12px;">
+            <div class="detail-tile">
+              <div class="meta">Access status</div>
+              <strong>
+                {% if student.access_status.value == "pending_credentials" %}
+                  Pending credentials
+                {% else %}
+                  Active
+                {% endif %}
+              </strong>
+            </div>
             <div class="detail-tile">
               <div class="meta">Average %</div>
               <strong>{{ "%.2f"|format(student.average_percentage) if student.average_percentage is not none else "—" }}</strong>

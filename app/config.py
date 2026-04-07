@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     attempt_default_page_size: int = Field(default=10, ge=1, le=50)
     attempt_max_page_size: int = Field(default=20, ge=1, le=100)
     app_timezone: str = "Asia/Kolkata"
+    payu_mode: str = "test"
+    payu_payment_url: str | None = None
+    payu_certificate_fee: str | None = None
 
     # Security
     csrf_secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(32))

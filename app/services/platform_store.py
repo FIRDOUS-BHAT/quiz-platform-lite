@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from math import ceil
 from typing import Any
@@ -8,7 +9,13 @@ from sqlalchemy.orm import aliased
 
 from app.config import settings
 from app.models import Attempt, Quiz, Result, SessionToken, User
-from app.schemas.auth import RegisterRequest, UserRole, UserSession
+from app.schemas.auth import (
+    PaidRegistrationRequest,
+    RegisterRequest,
+    UserAccessStatus,
+    UserRole,
+    UserSession,
+)
 from app.schemas.platform import (
     AdminParticipationPage,
     AdminParticipationRecord,
@@ -34,10 +41,16 @@ class PlatformStore:
     def __init__(self, session_factory: DatabaseSessionFactory):
         self.session_factory = session_factory
 
-    async def create_user(self, payload: RegisterRequest, role: UserRole = UserRole.STUDENT) -> UserSession:
+    async def create_user(
+        self,
+        payload: RegisterRequest,
+        role: UserRole = UserRole.STUDENT,
+        access_status: UserAccessStatus = UserAccessStatus.ACTIVE,
+    ) -> UserSession:
         user_id = uuid.uuid4().hex
         email = normalize_email(payload.email)
         password_hash = hash_password(payload.password)
+        created_at = utc_now_epoch()
 
         async with self.session_factory.begin() as session:
             existing = await session.execute(select(User.user_id).where(User.email == email))
@@ -50,7 +63,8 @@ class PlatformStore:
                 full_name=payload.full_name.strip(),
                 password_hash=password_hash,
                 role=role.value,
-                created_at=utc_now_epoch(),
+                access_status=access_status.value,
+                created_at=created_at,
             )
             session.add(user)
             return UserSession(
@@ -58,6 +72,46 @@ class PlatformStore:
                 email=user.email,
                 full_name=user.full_name,
                 role=UserRole(user.role),
+                access_status=UserAccessStatus(user.access_status),
+            )
+
+    async def create_paid_student_registration(self, payload: PaidRegistrationRequest) -> UserSession:
+        user_id = uuid.uuid4().hex
+        email = normalize_email(payload.email)
+        created_at = utc_now_epoch()
+
+        async with self.session_factory.begin() as session:
+            existing = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
+            if existing is not None:
+                if (
+                    existing.role == UserRole.STUDENT.value
+                    and existing.access_status == UserAccessStatus.PENDING_CREDENTIALS.value
+                ):
+                    raise ValueError(
+                        "A paid registration with this email is already recorded. "
+                        "Please wait for the exam date and login credentials by email."
+                    )
+                raise ValueError(
+                    "An account with this email already exists. "
+                    "Use the sign in page if you have already received your login credentials."
+                )
+
+            user = User(
+                user_id=user_id,
+                email=email,
+                full_name=payload.full_name.strip(),
+                password_hash=hash_password(secrets.token_urlsafe(24)),
+                role=UserRole.STUDENT.value,
+                access_status=UserAccessStatus.PENDING_CREDENTIALS.value,
+                created_at=created_at,
+            )
+            session.add(user)
+            return UserSession(
+                user_id=user.user_id,
+                email=user.email,
+                full_name=user.full_name,
+                role=UserRole(user.role),
+                access_status=UserAccessStatus(user.access_status),
             )
 
     async def authenticate_user(self, email: str) -> dict[str, Any] | None:
@@ -73,6 +127,7 @@ class PlatformStore:
                 "email": user.email,
                 "full_name": user.full_name,
                 "role": user.role,
+                "access_status": user.access_status,
                 "password_hash": user.password_hash,
             }
 
@@ -114,6 +169,7 @@ class PlatformStore:
                 email=user.email,
                 full_name=user.full_name,
                 role=UserRole(user.role),
+                access_status=UserAccessStatus(user.access_status),
             )
 
     async def create_quiz(
@@ -312,6 +368,7 @@ class PlatformStore:
                         User.user_id,
                         User.full_name,
                         User.email,
+                        User.access_status,
                         User.created_at,
                         started_expr.label("quizzes_started"),
                         submitted_expr.label("quizzes_submitted"),
@@ -323,7 +380,7 @@ class PlatformStore:
                     .outerjoin(Attempt, Attempt.user_id == User.user_id)
                     .outerjoin(Result, and_(Result.user_id == User.user_id, Result.quiz_id == Attempt.quiz_id))
                     .where(*filters)
-                    .group_by(User.user_id, User.full_name, User.email, User.created_at)
+                    .group_by(User.user_id, User.full_name, User.email, User.access_status, User.created_at)
                     .order_by(User.created_at.desc())
                     .limit(pagination.page_size)
                     .offset((pagination.page - 1) * pagination.page_size)
@@ -350,6 +407,7 @@ class PlatformStore:
                         User.user_id,
                         User.full_name,
                         User.email,
+                        User.access_status,
                         User.created_at,
                         started_expr.label("quizzes_started"),
                         submitted_expr.label("quizzes_submitted"),
@@ -361,7 +419,7 @@ class PlatformStore:
                     .outerjoin(Attempt, Attempt.user_id == User.user_id)
                     .outerjoin(Result, and_(Result.user_id == User.user_id, Result.quiz_id == Attempt.quiz_id))
                     .where(User.role == UserRole.STUDENT.value, User.user_id == user_id)
-                    .group_by(User.user_id, User.full_name, User.email, User.created_at)
+                    .group_by(User.user_id, User.full_name, User.email, User.access_status, User.created_at)
                 )
             ).first()
             if row is None:

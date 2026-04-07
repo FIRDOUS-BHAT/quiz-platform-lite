@@ -74,15 +74,18 @@ def create_db_pool(engine: AsyncEngine | None = None) -> DatabaseSessionFactory:
 
 async def initialize_schema(engine: AsyncEngine) -> None:
     statements = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'active';",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS lifecycle_status TEXT NOT NULL DEFAULT 'published';",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS availability_start_at BIGINT;",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS availability_end_at BIGINT;",
+        "UPDATE users SET access_status = 'active' WHERE access_status IS NULL OR access_status = '';",
         "UPDATE quizzes SET lifecycle_status = 'published' WHERE lifecycle_status IS NULL OR lifecycle_status = '';",
         "UPDATE quizzes SET is_published = (lifecycle_status = 'published');",
         "ALTER TABLE results ADD COLUMN IF NOT EXISTS attempt_id TEXT;",
         "ALTER TABLE results ADD COLUMN IF NOT EXISTS percentage DOUBLE PRECISION;",
         "ALTER TABLE results ADD COLUMN IF NOT EXISTS submission_id TEXT;",
         "CREATE INDEX IF NOT EXISTS idx_users_role_created_at ON users(role, created_at DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_users_access_status_created_at ON users(access_status, created_at DESC);",
         "CREATE INDEX IF NOT EXISTS idx_quizzes_lifecycle_created_at ON quizzes(lifecycle_status, created_at DESC);",
         "CREATE INDEX IF NOT EXISTS idx_quizzes_availability_window ON quizzes(availability_start_at, availability_end_at);",
         "CREATE INDEX IF NOT EXISTS idx_attempts_status_started_at ON attempts(status, started_at DESC);",
@@ -119,6 +122,7 @@ async def bootstrap_admin(session_factory: DatabaseSessionFactory) -> None:
                 full_name=settings.bootstrap_admin_name,
                 password_hash=hash_password(password),
                 role="admin",
+                access_status="active",
                 created_at=utc_now_epoch(),
             )
             .on_conflict_do_nothing(index_elements=[User.email])

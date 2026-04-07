@@ -16,7 +16,13 @@ from app.dependencies import (
     get_optional_current_user,
     get_store,
 )
-from app.schemas.auth import LoginRequest, RegisterRequest, UserRole, UserSession
+from app.schemas.auth import (
+    LoginRequest,
+    PaidRegistrationRequest,
+    UserAccessStatus,
+    UserRole,
+    UserSession,
+)
 from app.schemas.platform import PaginationMeta, StudentAttemptView
 from app.schemas.quiz import PublicQuizDefinition, QuizDefinition, QuizLifecycleStatus
 from app.schemas.submission import (
@@ -328,6 +334,12 @@ async def login_submit(
 
     if user.role != UserRole.STUDENT:
         return _redirect("/app/admin/login", "Admin accounts must use the admin sign in page", "info")
+    if user.access_status != UserAccessStatus.ACTIVE:
+        return _redirect(
+            "/app/login",
+            "Your paid registration is on file. The exam date and login credentials will be shared by email.",
+            "info",
+        )
 
     return await _issue_login_response(store=store, user=user, redirect_url="/app/student")
 
@@ -366,26 +378,41 @@ async def register_page(request: Request, store=Depends(get_store)) -> HTMLRespo
     current_user = await get_optional_current_user(request, store=store, scope="student")
     if current_user:
         return _redirect(_redirect_for_role(current_user))
-    return _render(request, "register.html", current_user=None, allow_registration=settings.allow_open_registration)
+    return _render(
+        request,
+        "register.html",
+        current_user=None,
+        allow_registration=settings.allow_open_registration,
+        payment_fee=settings.payu_certificate_fee,
+        payment_url=settings.payu_payment_url,
+    )
 
 
 @router.post("/app/register", dependencies=[Depends(rate_limit_register)])
 async def register_submit(
     full_name: str = Form(...),
     email: str = Form(...),
-    password: str = Form(...),
+    payment_acknowledged: str | None = Form(None),
     store=Depends(get_store),
 ) -> RedirectResponse:
     if not settings.allow_open_registration:
-        return _redirect("/app/login", "Open registration is disabled", "error")
+        return _redirect("/app/register", "Open registration is disabled", "error")
+
+    if payment_acknowledged != "yes":
+        return _redirect("/app/register", "Complete the payment step before submitting registration", "error")
 
     try:
-        payload = RegisterRequest(full_name=full_name, email=email, password=password)
-        await store.create_user(payload)
+        payload = PaidRegistrationRequest(full_name=full_name, email=email)
+        await store.create_paid_student_registration(payload)
     except Exception as exc:
         return _redirect("/app/register", str(exc), "error")
 
-    return _redirect("/app/login", "Registration complete. You can sign in now.", "success")
+    return _redirect(
+        "/app/register",
+        "Registration received. You will be informed via email about the exam date, "
+        "and the login credentials will also be sent by email.",
+        "success",
+    )
 
 
 @router.post("/app/logout")

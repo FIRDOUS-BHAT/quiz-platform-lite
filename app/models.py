@@ -19,6 +19,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(256), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
+    access_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)
     created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
     sessions: Mapped[list["SessionToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -27,6 +28,7 @@ class User(Base):
 
     __table_args__ = (
         CheckConstraint("role IN ('admin', 'student')", name="ck_users_role"),
+        CheckConstraint("access_status IN ('active', 'pending_credentials')", name="ck_users_access_status"),
     )
 
 

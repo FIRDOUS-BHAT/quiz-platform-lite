@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from typing_extensions import Annotated
 
+from app.schemas.auth import UserAccessStatus
 from app.schemas.quiz import PublicQuizDefinition, PublicQuizQuestion, QuizLifecycleStatus
 
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
@@ -39,6 +40,7 @@ class AdminStudentRecord(BaseModel):
     user_id: Identifier
     full_name: str
     email: str
+    access_status: UserAccessStatus = UserAccessStatus.ACTIVE
     created_at: int = Field(gt=0)
     quizzes_started: int = Field(ge=0)
     quizzes_submitted: int = Field(ge=0)
