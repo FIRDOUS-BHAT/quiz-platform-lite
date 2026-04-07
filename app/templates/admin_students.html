@@ -6,7 +6,7 @@
     <div>
       <span class="eyebrow">👥 Students</span>
       <h1>Review learners without mixing this table into every other admin task.</h1>
-      <p class="hero-lead">This view now covers both paid registrations awaiting credentials and active students already participating in scheduled assessments.</p>
+      <p class="hero-lead">This view covers unconfirmed candidates, payment-confirmed registrations awaiting credentials, and active students already participating in scheduled assessments.</p>
     </div>
     <div class="hero-side">
       <div class="hero-panel">
@@ -24,7 +24,7 @@
       </div>
       <div class="hero-panel">
         <div class="muted-strong">💡 Workflow</div>
-        <p class="meta">Search by name or email, then check access status before opening the student profile for attempt history and scoring details.</p>
+        <p class="meta">Search by name, email, or mobile number, then check payment and access status before opening the student profile for more detail.</p>
       </div>
     </div>
   </div>
@@ -34,7 +34,7 @@
   <div class="section-head">
     <div>
       <h2>📋 Registered Students</h2>
-      <p class="meta">Track who has completed paid registration, who already has credentials, and how active students are progressing.</p>
+      <p class="meta">Track who is still unconfirmed, who has completed payment, who is awaiting credentials, and how active students are progressing.</p>
     </div>
     <span class="badge">{{ students.pagination.total_items }} students</span>
   </div>
@@ -42,7 +42,7 @@
     <div class="filters-grid">
       <div class="field-group">
         <label for="student_q">Search students</label>
-        <input id="student_q" type="text" name="student_q" value="{{ student_filters.query or '' }}" placeholder="Name or email">
+        <input id="student_q" type="text" name="student_q" value="{{ student_filters.query or '' }}" placeholder="Name, email, or mobile">
       </div>
       <div class="field-group">
         <label for="student_page_size">Rows per page</label>
@@ -80,14 +80,24 @@
             <td data-label="Student">
               <strong><a class="text-link" href="/app/admin/students/{{ student.user_id }}">{{ student.full_name }}</a></strong>
               <div class="meta">{{ student.email }}</div>
+              {% if student.mobile_number %}
+                <div class="meta">{{ student.mobile_number }}</div>
+              {% endif %}
               <div class="meta">Joined {{ student.created_at|datetime }}</div>
             </td>
             <td data-label="Status">
-              {% if student.access_status.value == "pending_credentials" %}
-                <span class="badge pending">Pending Credentials</span>
+              {% if student.payment_status.value == "unconfirmed" %}
+                <span class="badge pending">Unconfirmed Candidate</span>
               {% else %}
-                <span class="badge active">Active</span>
+                <span class="badge active">Payment Confirmed</span>
               {% endif %}
+              <div class="meta" style="margin-top: 6px;">
+                {% if student.access_status.value == "pending_credentials" %}
+                  Awaiting credentials
+                {% else %}
+                  Active access
+                {% endif %}
+              </div>
             </td>
             <td data-label="Started">{{ student.quizzes_started }}</td>
             <td data-label="Submitted">{{ student.quizzes_submitted }}</td>

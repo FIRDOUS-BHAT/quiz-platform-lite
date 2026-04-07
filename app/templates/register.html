@@ -5,31 +5,38 @@
 <div class="auth-layout">
   <section class="auth-aside">
     <span class="eyebrow">Quiz Registration</span>
-    <h1>Registration starts after payment.</h1>
-    <p class="hero-lead">Students will not get immediate quiz access. After your paid registration is recorded, the exam date and login credentials will be shared by email.</p>
+    <h1>Register first, then complete payment.</h1>
+    <p class="hero-lead">Submitting this form creates your candidate record. Registrations without payment stay unconfirmed until the payment is verified, and quiz access is still shared later by email.</p>
     <div class="pill-row" style="margin-top: 18px;">
       {% if payment_fee %}
         <span class="pill">Fee INR {{ payment_fee }}</span>
       {% endif %}
-      <span class="pill">Scheduled access only</span>
+      <span class="pill">Payment confirms candidature</span>
     </div>
   </section>
 
   <section class="auth-panel">
     <div>
-      <h2>Paid Registration</h2>
-      <p class="meta" style="margin-top: 8px;">Complete the payment first, then submit the same email address where you want exam updates and login credentials to be sent.</p>
+      <h2>Candidate Registration</h2>
+      <p class="meta" style="margin-top: 8px;">Submit your details first. Then complete the payment using the same email address where you want exam updates and login credentials to be sent.</p>
     </div>
     {% if allow_registration %}
       <div class="detail-grid" style="margin-bottom: 20px;">
         <div class="detail-tile">
           <div class="meta">Step 1</div>
-          <strong>Make the payment</strong>
+          <strong>Submit your details</strong>
+          <p class="meta" style="margin-top: 8px;">
+            Register as a candidate first so your details are saved before you make the payment.
+          </p>
+        </div>
+        <div class="detail-tile">
+          <div class="meta">Step 2</div>
+          <strong>Complete payment</strong>
           <p class="meta" style="margin-top: 8px;">
             {% if payment_fee %}
-              Pay the registration fee of INR {{ payment_fee }} before submitting the form.
+              Pay INR {{ payment_fee }} after registration. Candidates without payment remain unconfirmed until the payment is verified.
             {% else %}
-              Complete the exam registration payment before submitting the form.
+              Complete the payment after registration. Candidates without payment remain unconfirmed until the payment is verified.
             {% endif %}
           </p>
           {% if payment_url %}
@@ -38,29 +45,33 @@
             <p class="meta" style="margin-top: 12px;">The payment link will be shared by the institute.</p>
           {% endif %}
         </div>
-        <div class="detail-tile">
-          <div class="meta">Step 2</div>
-          <strong>Submit your details</strong>
-          <p class="meta" style="margin-top: 8px;">Once your payment-based registration is recorded, you will be informed via email about the exam date and the login credentials.</p>
-        </div>
       </div>
       <form method="post" action="/app/register" class="stack">
         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
         <div>
-          <label for="full_name">Full name</label>
+          <label for="full_name">Name</label>
           <input id="full_name" name="full_name" type="text" placeholder="John Doe" required autocomplete="name">
         </div>
         <div>
-          <label for="email">Email</label>
-          <input id="email" name="email" type="email" placeholder="you@example.com" required autocomplete="email">
+          <label for="father_name">Father's Name</label>
+          <input id="father_name" name="father_name" type="text" placeholder="Father's name" required>
         </div>
         <div>
-          <label for="payment_acknowledged" style="display: flex; gap: 12px; align-items: flex-start;">
-            <input id="payment_acknowledged" name="payment_acknowledged" type="checkbox" value="yes" required style="margin-top: 4px;">
-            <span>I confirm that I have completed the payment and want to register using this email address.</span>
-          </label>
+          <label for="mother_name">Mother's Name</label>
+          <input id="mother_name" name="mother_name" type="text" placeholder="Mother's name" required>
+        </div>
+        <div>
+          <label for="mobile_number">Mobile Number</label>
+          <input id="mobile_number" name="mobile_number" type="tel" placeholder="9876543210" required autocomplete="tel" inputmode="tel">
+        </div>
+        <div>
+          <label for="email">Email ID</label>
+          <input id="email" name="email" type="email" placeholder="you@example.com" required autocomplete="email">
         </div>
         <button type="submit">Submit Registration →</button>
+        <div class="form-note">
+          After registration, complete the payment to move from unconfirmed candidate to confirmed candidate.
+        </div>
         <div class="form-note">
           Already received your login credentials? <a href="/app/login" class="text-link">Sign in</a>
         </div>
@@ -68,7 +79,7 @@
     {% else %}
       <div class="empty-state">
         <strong>Registration Closed</strong>
-        <p class="meta" style="margin-top: 8px;">Paid registration is currently disabled. Contact your administrator for access.</p>
+        <p class="meta" style="margin-top: 8px;">Candidate registration is currently disabled. Contact your administrator for access.</p>
         <a href="/app/login" class="button secondary small">Back to Sign In</a>
       </div>
     {% endif %}

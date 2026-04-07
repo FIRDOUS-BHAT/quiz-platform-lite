@@ -17,8 +17,12 @@ class User(Base):
     user_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    father_name: Mapped[str | None] = mapped_column(String(256))
+    mother_name: Mapped[str | None] = mapped_column(String(256))
+    mobile_number: Mapped[str | None] = mapped_column(String(32))
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
+    payment_status: Mapped[str] = mapped_column(String(32), nullable=False, default="confirmed", index=True)
     access_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)
     created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
@@ -28,6 +32,7 @@ class User(Base):
 
     __table_args__ = (
         CheckConstraint("role IN ('admin', 'student')", name="ck_users_role"),
+        CheckConstraint("payment_status IN ('unconfirmed', 'confirmed')", name="ck_users_payment_status"),
         CheckConstraint("access_status IN ('active', 'pending_credentials')", name="ck_users_access_status"),
     )
 

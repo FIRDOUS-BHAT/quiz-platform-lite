@@ -10,6 +10,7 @@ from sqlalchemy.orm import aliased
 from app.config import settings
 from app.models import Attempt, Quiz, Result, SessionToken, User
 from app.schemas.auth import (
+    PaymentStatus,
     PaidRegistrationRequest,
     RegisterRequest,
     UserAccessStatus,
@@ -45,6 +46,7 @@ class PlatformStore:
         self,
         payload: RegisterRequest,
         role: UserRole = UserRole.STUDENT,
+        payment_status: PaymentStatus = PaymentStatus.CONFIRMED,
         access_status: UserAccessStatus = UserAccessStatus.ACTIVE,
     ) -> UserSession:
         user_id = uuid.uuid4().hex
@@ -63,6 +65,7 @@ class PlatformStore:
                 full_name=payload.full_name.strip(),
                 password_hash=password_hash,
                 role=role.value,
+                payment_status=payment_status.value,
                 access_status=access_status.value,
                 created_at=created_at,
             )
@@ -72,6 +75,7 @@ class PlatformStore:
                 email=user.email,
                 full_name=user.full_name,
                 role=UserRole(user.role),
+                payment_status=PaymentStatus(user.payment_status),
                 access_status=UserAccessStatus(user.access_status),
             )
 
@@ -87,8 +91,13 @@ class PlatformStore:
                     existing.role == UserRole.STUDENT.value
                     and existing.access_status == UserAccessStatus.PENDING_CREDENTIALS.value
                 ):
+                    if existing.payment_status == PaymentStatus.UNCONFIRMED.value:
+                        raise ValueError(
+                            "A registration with this email is already on file. "
+                            "Complete the payment to confirm your candidature."
+                        )
                     raise ValueError(
-                        "A paid registration with this email is already recorded. "
+                        "A confirmed registration with this email is already on file. "
                         "Please wait for the exam date and login credentials by email."
                     )
                 raise ValueError(
@@ -100,8 +109,12 @@ class PlatformStore:
                 user_id=user_id,
                 email=email,
                 full_name=payload.full_name.strip(),
+                father_name=payload.father_name.strip(),
+                mother_name=payload.mother_name.strip(),
+                mobile_number=payload.mobile_number.strip(),
                 password_hash=hash_password(secrets.token_urlsafe(24)),
                 role=UserRole.STUDENT.value,
+                payment_status=PaymentStatus.UNCONFIRMED.value,
                 access_status=UserAccessStatus.PENDING_CREDENTIALS.value,
                 created_at=created_at,
             )
@@ -111,6 +124,7 @@ class PlatformStore:
                 email=user.email,
                 full_name=user.full_name,
                 role=UserRole(user.role),
+                payment_status=PaymentStatus(user.payment_status),
                 access_status=UserAccessStatus(user.access_status),
             )
 
@@ -127,6 +141,7 @@ class PlatformStore:
                 "email": user.email,
                 "full_name": user.full_name,
                 "role": user.role,
+                "payment_status": user.payment_status,
                 "access_status": user.access_status,
                 "password_hash": user.password_hash,
             }
@@ -169,8 +184,23 @@ class PlatformStore:
                 email=user.email,
                 full_name=user.full_name,
                 role=UserRole(user.role),
+                payment_status=PaymentStatus(user.payment_status),
                 access_status=UserAccessStatus(user.access_status),
             )
+
+    async def update_student_payment_status(self, user_id: str, payment_status: PaymentStatus) -> bool:
+        async with self.session_factory.begin() as session:
+            user = (
+                await session.execute(
+                    select(User)
+                    .where(User.user_id == user_id, User.role == UserRole.STUDENT.value)
+                    .with_for_update(skip_locked=False)
+                )
+            ).scalar_one_or_none()
+            if user is None:
+                return False
+            user.payment_status = payment_status.value
+            return True
 
     async def create_quiz(
         self,
@@ -347,7 +377,9 @@ class PlatformStore:
         filters = [User.role == UserRole.STUDENT.value]
         if search_term:
             pattern = f"%{search_term}%"
-            filters.append(or_(User.full_name.ilike(pattern), User.email.ilike(pattern)))
+            filters.append(
+                or_(User.full_name.ilike(pattern), User.email.ilike(pattern), User.mobile_number.ilike(pattern))
+            )
 
         started_expr = func.count(Attempt.attempt_id)
         submitted_expr = func.coalesce(
@@ -368,6 +400,8 @@ class PlatformStore:
                         User.user_id,
                         User.full_name,
                         User.email,
+                        User.mobile_number,
+                        User.payment_status,
                         User.access_status,
                         User.created_at,
                         started_expr.label("quizzes_started"),
@@ -380,7 +414,15 @@ class PlatformStore:
                     .outerjoin(Attempt, Attempt.user_id == User.user_id)
                     .outerjoin(Result, and_(Result.user_id == User.user_id, Result.quiz_id == Attempt.quiz_id))
                     .where(*filters)
-                    .group_by(User.user_id, User.full_name, User.email, User.access_status, User.created_at)
+                    .group_by(
+                        User.user_id,
+                        User.full_name,
+                        User.email,
+                        User.mobile_number,
+                        User.payment_status,
+                        User.access_status,
+                        User.created_at,
+                    )
                     .order_by(User.created_at.desc())
                     .limit(pagination.page_size)
                     .offset((pagination.page - 1) * pagination.page_size)
@@ -406,7 +448,11 @@ class PlatformStore:
                     select(
                         User.user_id,
                         User.full_name,
+                        User.father_name,
+                        User.mother_name,
+                        User.mobile_number,
                         User.email,
+                        User.payment_status,
                         User.access_status,
                         User.created_at,
                         started_expr.label("quizzes_started"),
@@ -419,7 +465,17 @@ class PlatformStore:
                     .outerjoin(Attempt, Attempt.user_id == User.user_id)
                     .outerjoin(Result, and_(Result.user_id == User.user_id, Result.quiz_id == Attempt.quiz_id))
                     .where(User.role == UserRole.STUDENT.value, User.user_id == user_id)
-                    .group_by(User.user_id, User.full_name, User.email, User.access_status, User.created_at)
+                    .group_by(
+                        User.user_id,
+                        User.full_name,
+                        User.father_name,
+                        User.mother_name,
+                        User.mobile_number,
+                        User.email,
+                        User.payment_status,
+                        User.access_status,
+                        User.created_at,
+                    )
                 )
             ).first()
             if row is None:

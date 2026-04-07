@@ -6,13 +6,13 @@
   <section class="auth-aside">
     <span class="eyebrow">Student Sign In</span>
     <h1>Sign in with the credentials sent to your email.</h1>
-    <p class="hero-lead">Paid registration does not unlock the quiz immediately. The exam date and login credentials are shared later by email.</p>
+    <p class="hero-lead">Registration and payment do not unlock the quiz immediately. Confirmed candidates receive the exam date and login credentials later by email.</p>
   </section>
 
   <section class="auth-panel">
     <div>
       <h2>Sign In</h2>
-      <p class="meta" style="margin-top: 8px;">Use the email address and password shared with you after your registration is approved for the scheduled exam.</p>
+      <p class="meta" style="margin-top: 8px;">Use the email address and password shared with you after your registration is confirmed and scheduled for the exam.</p>
     </div>
     <form method="post" action="/app/login" class="stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
@@ -26,7 +26,7 @@
       </div>
       <button type="submit">Sign In →</button>
       <div class="form-note">
-        Need to register first? <a href="/app/register" class="text-link">Complete paid registration</a>
+        Need to register first? <a href="/app/register" class="text-link">Create your candidate registration</a>
       </div>
     </form>
   </section>

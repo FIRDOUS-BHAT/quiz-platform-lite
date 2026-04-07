@@ -2,7 +2,7 @@ from typing import Literal
 
 from fastapi import Depends, HTTPException, Request, status
 
-from app.schemas.auth import UserAccessStatus, UserSession
+from app.schemas.auth import PaymentStatus, UserAccessStatus, UserSession
 from app.services.db import DatabaseSessionFactory
 
 SessionScope = Literal["student", "admin", "either"]
@@ -96,9 +96,15 @@ async def get_current_user(request: Request, store=Depends(get_store)) -> UserSe
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     if user.access_status != UserAccessStatus.ACTIVE:
+        detail = "Your registration and payment are on file. The exam date and login credentials will be shared by email."
+        if user.payment_status == PaymentStatus.UNCONFIRMED:
+            detail = (
+                "Your registration is on file, but payment is still pending confirmation. "
+                "Complete the payment to confirm your candidature."
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Your registration is on file. The exam date and login credentials will be shared by email.",
+            detail=detail,
         )
     return user
 

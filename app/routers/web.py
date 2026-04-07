@@ -18,6 +18,7 @@ from app.dependencies import (
 )
 from app.schemas.auth import (
     LoginRequest,
+    PaymentStatus,
     PaidRegistrationRequest,
     UserAccessStatus,
     UserRole,
@@ -146,6 +147,19 @@ def _safe_admin_quiz_return_url(value: str | None) -> str:
     if normalized and normalized.startswith("/app/admin/quizzes") and "://" not in normalized:
         return normalized
     return "/app/admin/quizzes"
+
+
+def _safe_admin_student_return_url(value: str | None) -> str:
+    normalized = _normalized_text(value)
+    if normalized and normalized.startswith("/app/admin/students") and "://" not in normalized:
+        return normalized
+    return "/app/admin/students"
+
+
+def _pending_registration_message(user: UserSession) -> str:
+    if user.payment_status == PaymentStatus.UNCONFIRMED:
+        return "Your registration is on file, but payment is still pending confirmation. Complete the payment to confirm your candidature."
+    return "Your registration and payment are on file. The exam date and login credentials will be shared by email."
 
 
 def _build_answer_map_from_form(form) -> dict[str, str]:
@@ -335,11 +349,7 @@ async def login_submit(
     if user.role != UserRole.STUDENT:
         return _redirect("/app/admin/login", "Admin accounts must use the admin sign in page", "info")
     if user.access_status != UserAccessStatus.ACTIVE:
-        return _redirect(
-            "/app/login",
-            "Your paid registration is on file. The exam date and login credentials will be shared by email.",
-            "info",
-        )
+        return _redirect("/app/login", _pending_registration_message(user), "info")
 
     return await _issue_login_response(store=store, user=user, redirect_url="/app/student")
 
@@ -391,26 +401,31 @@ async def register_page(request: Request, store=Depends(get_store)) -> HTMLRespo
 @router.post("/app/register", dependencies=[Depends(rate_limit_register)])
 async def register_submit(
     full_name: str = Form(...),
+    father_name: str = Form(...),
+    mother_name: str = Form(...),
+    mobile_number: str = Form(...),
     email: str = Form(...),
-    payment_acknowledged: str | None = Form(None),
     store=Depends(get_store),
 ) -> RedirectResponse:
     if not settings.allow_open_registration:
         return _redirect("/app/register", "Open registration is disabled", "error")
 
-    if payment_acknowledged != "yes":
-        return _redirect("/app/register", "Complete the payment step before submitting registration", "error")
-
     try:
-        payload = PaidRegistrationRequest(full_name=full_name, email=email)
+        payload = PaidRegistrationRequest(
+            full_name=full_name,
+            father_name=father_name,
+            mother_name=mother_name,
+            mobile_number=mobile_number,
+            email=email,
+        )
         await store.create_paid_student_registration(payload)
     except Exception as exc:
         return _redirect("/app/register", str(exc), "error")
 
     return _redirect(
         "/app/register",
-        "Registration received. You will be informed via email about the exam date, "
-        "and the login credentials will also be sent by email.",
+        "Registration received. Complete the payment next to confirm your candidature. "
+        "After payment is verified, the exam date and login credentials will be shared by email.",
         "success",
     )
 
@@ -737,6 +752,29 @@ async def admin_student_detail(
         attempt_status_options=ADMIN_ATTEMPT_STATUSES,
         error=None,
     )
+
+
+@router.post("/app/admin/students/{user_id}/payment-status")
+async def admin_student_payment_status_submit(
+    user_id: str,
+    payment_status: str = Form(...),
+    next_url: str | None = Form(None),
+    current_user: UserSession = Depends(get_current_admin),
+    store=Depends(get_store),
+) -> RedirectResponse:
+    del current_user
+    return_url = _safe_admin_student_return_url(next_url)
+    normalized_status = _normalized_text(payment_status)
+    if normalized_status not in {status.value for status in PaymentStatus}:
+        return _redirect(return_url, "Invalid payment status", "error")
+
+    target_status = PaymentStatus(normalized_status)
+    updated = await store.update_student_payment_status(user_id, target_status)
+    if not updated:
+        return _redirect(return_url, "Student not found", "error")
+
+    message = "Payment marked as confirmed." if target_status == PaymentStatus.CONFIRMED else "Candidate marked as unconfirmed."
+    return _redirect(return_url, message, "success")
 
 
 @router.post("/app/admin/upload")

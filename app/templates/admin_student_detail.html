@@ -21,9 +21,19 @@
         <p class="hero-lead">{{ student.email }}</p>
         <div class="pill-row">
           <span class="pill">📅 Joined {{ student.created_at|datetime }}</span>
+          {% if student.mobile_number %}
+            <span class="pill">📱 {{ student.mobile_number }}</span>
+          {% endif %}
+          <span class="pill">
+            {% if student.payment_status.value == "unconfirmed" %}
+              💳 Payment pending
+            {% else %}
+              ✅ Payment confirmed
+            {% endif %}
+          </span>
           <span class="pill">
             {% if student.access_status.value == "pending_credentials" %}
-              ⏳ Pending credentials
+              ⏳ Awaiting credentials
             {% else %}
               ✅ Active access
             {% endif %}
@@ -38,15 +48,56 @@
       </div>
       <div class="hero-side">
         <div class="hero-panel">
+          <div class="muted-strong">📝 Registration details</div>
+          <div class="detail-grid" style="margin-top: 12px;">
+            <div class="detail-tile">
+              <div class="meta">Father's name</div>
+              <strong>{{ student.father_name or "—" }}</strong>
+            </div>
+            <div class="detail-tile">
+              <div class="meta">Mother's name</div>
+              <strong>{{ student.mother_name or "—" }}</strong>
+            </div>
+            <div class="detail-tile">
+              <div class="meta">Mobile number</div>
+              <strong>{{ student.mobile_number or "—" }}</strong>
+            </div>
+          </div>
+          {% if student.access_status.value == "pending_credentials" %}
+            <form method="post" action="/app/admin/students/{{ student.user_id }}/payment-status" class="stack" style="margin-top: 16px;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+              <input type="hidden" name="next_url" value="{{ query_url(request) }}">
+              {% if student.payment_status.value == "unconfirmed" %}
+                <input type="hidden" name="payment_status" value="confirmed">
+                <button type="submit" class="small">Mark Payment Confirmed</button>
+              {% else %}
+                <input type="hidden" name="payment_status" value="unconfirmed">
+                <button type="submit" class="secondary small">Mark as Unconfirmed</button>
+              {% endif %}
+            </form>
+            <p class="meta" style="margin-top: 8px;">Use this control after you verify whether the candidate has completed the payment.</p>
+          {% endif %}
+        </div>
+        <div class="hero-panel">
           <div class="muted-strong">📈 Performance summary</div>
           <div class="detail-grid" style="margin-top: 12px;">
             <div class="detail-tile">
               <div class="meta">Access status</div>
               <strong>
                 {% if student.access_status.value == "pending_credentials" %}
-                  Pending credentials
+                  Awaiting credentials
                 {% else %}
                   Active
+                {% endif %}
+              </strong>
+            </div>
+            <div class="detail-tile">
+              <div class="meta">Payment status</div>
+              <strong>
+                {% if student.payment_status.value == "unconfirmed" %}
+                  Unconfirmed
+                {% else %}
+                  Confirmed
                 {% endif %}
               </strong>
             </div>
