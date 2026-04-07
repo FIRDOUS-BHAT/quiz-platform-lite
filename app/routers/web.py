@@ -388,6 +388,8 @@ async def register_page(request: Request, store=Depends(get_store)) -> HTMLRespo
     current_user = await get_optional_current_user(request, store=store, scope="student")
     if current_user:
         return _redirect(_redirect_for_role(current_user))
+    payment_ready = request.query_params.get("payment_ready") == "yes"
+    registered_email = _normalized_text(request.query_params.get("registered_email"))
     return _render(
         request,
         "register.html",
@@ -395,6 +397,8 @@ async def register_page(request: Request, store=Depends(get_store)) -> HTMLRespo
         allow_registration=settings.allow_open_registration,
         payment_fee=settings.payu_certificate_fee,
         payment_url=settings.payu_payment_url,
+        payment_ready=payment_ready,
+        registered_email=registered_email,
     )
 
 
@@ -410,6 +414,7 @@ async def register_submit(
     if not settings.allow_open_registration:
         return _redirect("/app/register", "Open registration is disabled", "error")
 
+    payload: PaidRegistrationRequest | None = None
     try:
         payload = PaidRegistrationRequest(
             full_name=full_name,
@@ -420,10 +425,14 @@ async def register_submit(
         )
         await store.create_paid_student_registration(payload)
     except Exception as exc:
+        if payload is not None and "Complete the payment to confirm your candidature." in str(exc):
+            payment_params = urlencode({"payment_ready": "yes", "registered_email": payload.email})
+            return _redirect(f"/app/register?{payment_params}", str(exc), "info")
         return _redirect("/app/register", str(exc), "error")
 
+    payment_params = urlencode({"payment_ready": "yes", "registered_email": payload.email})
     return _redirect(
-        "/app/register",
+        f"/app/register?{payment_params}",
         "Registration received. Complete the payment next to confirm your candidature. "
         "After payment is verified, the exam date and login credentials will be shared by email.",
         "success",

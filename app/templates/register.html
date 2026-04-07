@@ -18,7 +18,7 @@
   <section class="auth-panel">
     <div>
       <h2>Candidate Registration</h2>
-      <p class="meta" style="margin-top: 8px;">Submit your details first. Then complete the payment using the same email address where you want exam updates and login credentials to be sent.</p>
+      <p class="meta" style="margin-top: 8px;">Submit your details first. The payment option appears after registration so you can continue with the same email address where you want exam updates and login credentials to be sent.</p>
     </div>
     {% if allow_registration %}
       <div class="detail-grid" style="margin-bottom: 20px;">
@@ -32,50 +32,71 @@
         <div class="detail-tile">
           <div class="meta">Step 2</div>
           <strong>Complete payment</strong>
-          <p class="meta" style="margin-top: 8px;">
-            {% if payment_fee %}
-              Pay INR {{ payment_fee }} after registration. Candidates without payment remain unconfirmed until the payment is verified.
-            {% else %}
-              Complete the payment after registration. Candidates without payment remain unconfirmed until the payment is verified.
+          {% if payment_ready %}
+            <p class="meta" style="margin-top: 8px;">
+              {% if payment_fee %}
+                Pay INR {{ payment_fee }} now to confirm your candidature.
+              {% else %}
+                Complete the payment now to confirm your candidature.
+              {% endif %}
+            </p>
+            {% if registered_email %}
+              <p class="meta" style="margin-top: 12px;">Use <strong>{{ registered_email }}</strong> while completing the payment.</p>
             {% endif %}
-          </p>
-          {% if payment_url %}
-            <a href="{{ payment_url }}" target="_blank" rel="noopener noreferrer" class="button secondary small" style="margin-top: 12px;">Open Payment Page</a>
+            {% if payment_url %}
+              <a href="{{ payment_url }}" target="_blank" rel="noopener noreferrer" class="button secondary small" style="margin-top: 12px;">Open Payment Page</a>
+            {% else %}
+              <p class="meta" style="margin-top: 12px;">The payment link will be shared by the institute.</p>
+            {% endif %}
           {% else %}
-            <p class="meta" style="margin-top: 12px;">The payment link will be shared by the institute.</p>
+            <p class="meta" style="margin-top: 8px;">This payment option unlocks immediately after a successful registration submission.</p>
+            <span class="button secondary small" style="margin-top: 12px; pointer-events: none; opacity: 0.65;">Available After Registration</span>
           {% endif %}
         </div>
       </div>
-      <form method="post" action="/app/register" class="stack">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-        <div>
-          <label for="full_name">Name</label>
-          <input id="full_name" name="full_name" type="text" placeholder="John Doe" required minlength="2" maxlength="256" autocomplete="name" autocapitalize="words" spellcheck="false" title="Enter at least 2 characters using letters, spaces, apostrophes, periods, or hyphens.">
+      {% if payment_ready %}
+        <div class="empty-state" style="padding: 24px; text-align: left;">
+          <strong>Registration Submitted</strong>
+          <p class="meta" style="margin-top: 8px;">Your candidate details are already on file. Continue with the payment step to confirm your candidature.</p>
+          {% if registered_email %}
+            <p class="meta" style="margin-top: 8px;">Registered email: <strong>{{ registered_email }}</strong></p>
+          {% endif %}
+          <div class="nav" style="margin-top: 16px;">
+            <a href="/app/register" class="button secondary small">Register Another Candidate</a>
+          </div>
         </div>
-        <div>
-          <label for="father_name">Father's Name</label>
-          <input id="father_name" name="father_name" type="text" placeholder="Father's name" required minlength="2" maxlength="256" autocapitalize="words" spellcheck="false" title="Enter at least 2 characters using letters, spaces, apostrophes, periods, or hyphens.">
-        </div>
-        <div>
-          <label for="mother_name">Mother's Name</label>
-          <input id="mother_name" name="mother_name" type="text" placeholder="Mother's name" required minlength="2" maxlength="256" autocapitalize="words" spellcheck="false" title="Enter at least 2 characters using letters, spaces, apostrophes, periods, or hyphens.">
-        </div>
-        <div>
-          <label for="mobile_number">Mobile Number</label>
-          <input id="mobile_number" name="mobile_number" type="tel" placeholder="9876543210" required minlength="10" maxlength="20" pattern="\+?[0-9()\-\s]{10,20}" autocomplete="tel" inputmode="tel" title="Enter 10 to 15 digits. Spaces, parentheses, hyphens, and a leading + are allowed.">
-        </div>
-        <div>
-          <label for="email">Email ID</label>
-          <input id="email" name="email" type="email" placeholder="you@example.com" required maxlength="320" autocomplete="email" autocapitalize="none" spellcheck="false">
-        </div>
-        <button type="submit">Submit Registration →</button>
-        <div class="form-note">
-          After registration, complete the payment to move from unconfirmed candidate to confirmed candidate.
-        </div>
-        <div class="form-note">
-          Already received your login credentials? <a href="/app/login" class="text-link">Sign in</a>
-        </div>
-      </form>
+      {% else %}
+        <form method="post" action="/app/register" class="stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+          <div>
+            <label for="full_name">Name</label>
+            <input id="full_name" name="full_name" type="text" placeholder="John Doe" required minlength="2" maxlength="256" autocomplete="name" autocapitalize="words" spellcheck="false" title="Enter at least 2 characters using letters, spaces, apostrophes, periods, or hyphens.">
+          </div>
+          <div>
+            <label for="father_name">Father's Name</label>
+            <input id="father_name" name="father_name" type="text" placeholder="Father's name" required minlength="2" maxlength="256" autocapitalize="words" spellcheck="false" title="Enter at least 2 characters using letters, spaces, apostrophes, periods, or hyphens.">
+          </div>
+          <div>
+            <label for="mother_name">Mother's Name</label>
+            <input id="mother_name" name="mother_name" type="text" placeholder="Mother's name" required minlength="2" maxlength="256" autocapitalize="words" spellcheck="false" title="Enter at least 2 characters using letters, spaces, apostrophes, periods, or hyphens.">
+          </div>
+          <div>
+            <label for="mobile_number">Mobile Number</label>
+            <input id="mobile_number" name="mobile_number" type="tel" placeholder="9876543210" required minlength="10" maxlength="20" pattern="\+?[0-9()\-\s]{10,20}" autocomplete="tel" inputmode="tel" title="Enter 10 to 15 digits. Spaces, parentheses, hyphens, and a leading + are allowed.">
+          </div>
+          <div>
+            <label for="email">Email ID</label>
+            <input id="email" name="email" type="email" placeholder="you@example.com" required maxlength="320" autocomplete="email" autocapitalize="none" spellcheck="false">
+          </div>
+          <button type="submit">Submit Registration →</button>
+          <div class="form-note">
+            After registration, the payment option will appear on this page so you can continue immediately.
+          </div>
+          <div class="form-note">
+            Already received your login credentials? <a href="/app/login" class="text-link">Sign in</a>
+          </div>
+        </form>
+      {% endif %}
     {% else %}
       <div class="empty-state">
         <strong>Registration Closed</strong>
