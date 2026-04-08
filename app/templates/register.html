@@ -32,7 +32,13 @@
         <div class="detail-tile">
           <div class="meta">Step 2</div>
           <strong>Complete payment</strong>
-          {% if payment_ready %}
+          {% if payment_result == "success" %}
+            <p class="meta" style="margin-top: 8px;">Payment verified. Your candidature is confirmed.</p>
+            {% if registered_email %}
+              <p class="meta" style="margin-top: 12px;">Registered email: <strong>{{ registered_email }}</strong></p>
+            {% endif %}
+            <span class="button secondary small" style="margin-top: 12px; pointer-events: none; opacity: 0.8;">Payment Verified</span>
+          {% elif payment_ready %}
             <p class="meta" style="margin-top: 8px;">
               {% if payment_fee %}
                 Pay INR {{ payment_fee }} now to confirm your candidature.
@@ -43,10 +49,19 @@
             {% if registered_email %}
               <p class="meta" style="margin-top: 12px;">Use <strong>{{ registered_email }}</strong> while completing the payment.</p>
             {% endif %}
-            {% if payment_url %}
-              <a href="{{ payment_url }}" target="_blank" rel="noopener noreferrer" class="button secondary small" style="margin-top: 12px;">Open Payment Page</a>
+            {% if payment_result == "failure" %}
+              <p class="meta" style="margin-top: 12px;">The last payment attempt did not complete. You can start the payment again.</p>
+            {% elif payment_result == "tampered" %}
+              <p class="meta" style="margin-top: 12px;">The last payment response could not be verified, so this candidate is still unconfirmed.</p>
+            {% endif %}
+            {% if payment_enabled and registered_email %}
+              <form method="post" action="/app/register/payment/start" class="stack" style="margin-top: 12px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                <input type="hidden" name="registered_email" value="{{ registered_email }}">
+                <button type="submit" class="secondary small">Continue to Secure Payment</button>
+              </form>
             {% else %}
-              <p class="meta" style="margin-top: 12px;">The payment link will be shared by the institute.</p>
+              <p class="meta" style="margin-top: 12px;">The payment gateway is not configured yet. Contact the institute administrator.</p>
             {% endif %}
           {% else %}
             <p class="meta" style="margin-top: 8px;">This payment option unlocks immediately after a successful registration submission.</p>
@@ -54,10 +69,26 @@
           {% endif %}
         </div>
       </div>
-      {% if payment_ready %}
+      {% if payment_result == "success" %}
+        <div class="empty-state" style="padding: 24px; text-align: left;">
+          <strong>Payment Verified</strong>
+          <p class="meta" style="margin-top: 8px;">Your registration and payment are on file. The exam date and login credentials will be shared by email.</p>
+          {% if registered_email %}
+            <p class="meta" style="margin-top: 8px;">Registered email: <strong>{{ registered_email }}</strong></p>
+          {% endif %}
+          <div class="nav" style="margin-top: 16px;">
+            <a href="/app/register" class="button secondary small">Register Another Candidate</a>
+          </div>
+        </div>
+      {% elif payment_ready %}
         <div class="empty-state" style="padding: 24px; text-align: left;">
           <strong>Registration Submitted</strong>
           <p class="meta" style="margin-top: 8px;">Your candidate details are already on file. Continue with the payment step to confirm your candidature.</p>
+          {% if payment_result == "failure" %}
+            <p class="meta" style="margin-top: 8px;">The last payment attempt did not complete. Start the payment again when you are ready.</p>
+          {% elif payment_result == "tampered" %}
+            <p class="meta" style="margin-top: 8px;">The last payment response could not be verified. If the amount was deducted, contact the institute before trying again.</p>
+          {% endif %}
           {% if registered_email %}
             <p class="meta" style="margin-top: 8px;">Registered email: <strong>{{ registered_email }}</strong></p>
           {% endif %}

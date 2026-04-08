@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Redirecting to Payment{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<div class="auth-layout">
+  <section class="auth-aside">
+    <span class="eyebrow">Secure Payment</span>
+    <h1>Redirecting you to PayU.</h1>
+    <p class="hero-lead">Your registration is already on file. The payment page opens next so you can confirm the candidature securely.</p>
+    <div class="pill-row" style="margin-top: 18px;">
+      <span class="pill">Candidate {{ payment.email }}</span>
+      <span class="pill">INR {{ payment.amount }}</span>
+    </div>
+  </section>
+
+  <section class="auth-panel">
+    <div class="empty-state" style="padding: 24px; text-align: left;">
+      <strong>Preparing secure payment handoff</strong>
+      <p class="meta" style="margin-top: 8px;">If the redirect does not start automatically, continue manually using the button below.</p>
+      <form id="payu-payment-form" method="post" action="{{ form_action }}" class="stack" style="margin-top: 16px;">
+        {% for key, value in payment_fields.items() %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}">
+        {% endfor %}
+        <button type="submit">Continue to PayU →</button>
+      </form>
+      <p class="meta" style="margin-top: 12px;">After PayU responds, this page will route you back here with the verification result.</p>
+    </div>
+  </section>
+</div>
+<script>
+  (function () {
+    var form = document.getElementById("payu-payment-form");
+    if (form) {
+      form.submit();
+    }
+  }());
+</script>
+{% endblock %}

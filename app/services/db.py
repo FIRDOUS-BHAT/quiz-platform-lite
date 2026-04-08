@@ -96,6 +96,8 @@ async def initialize_schema(engine: AsyncEngine) -> None:
         "ALTER TABLE results ADD COLUMN IF NOT EXISTS submission_id TEXT;",
         "CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created_at ON audit_logs(entity_type, entity_id, created_at DESC);",
         "CREATE INDEX IF NOT EXISTS idx_audit_logs_event_created_at ON audit_logs(event_type, created_at DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_payment_transactions_user_created_at ON payment_transactions(user_id, created_at DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_payment_transactions_status_created_at ON payment_transactions(status, created_at DESC);",
         """
         DO $$
         BEGIN

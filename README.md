@@ -52,9 +52,12 @@ cp .env.example .env
 CSRF_SECRET_KEY=replace-me
 BOOTSTRAP_ADMIN_PASSWORD=replace-me
 APP_TIMEZONE=Asia/Kolkata
+PUBLIC_BASE_URL=https://your-domain.example
 SECURE_COOKIES=true
 ENVIRONMENT=production
 TRUSTED_HOSTS=your-domain.example,localhost
+PAYU_MERCHANT_KEY=replace-me
+PAYU_MERCHANT_SALT=replace-me
 ```
 
 3. Start the stack.
@@ -91,6 +94,27 @@ alembic upgrade head
 ```
 
 For older environments, the app still keeps a compatibility startup schema initializer, but Alembic should be the primary deployment path going forward.
+
+## Payment Gateway
+
+The register flow is now server-driven:
+- the candidate submits the registration form first
+- the app creates a pending PayU transaction on your server
+- the browser is then redirected to PayU with a server-generated hash
+- PayU returns to `/app/payments/payu/callback`, where the app verifies the callback hash before confirming payment
+
+For production, make sure these are set:
+
+```env
+PUBLIC_BASE_URL=https://your-domain.example
+PAYU_MERCHANT_KEY=your-merchant-key
+PAYU_MERCHANT_SALT=your-merchant-salt
+PAYU_PAYMENT_URL=https://secure.payu.in/_payment
+PAYU_CERTIFICATE_FEE=100.00
+PAYU_PRODUCT_INFO=Quiz Registration
+```
+
+`PUBLIC_BASE_URL` should be the public HTTPS origin that PayU can reach for success/failure callbacks.
 
 ## Tests
 

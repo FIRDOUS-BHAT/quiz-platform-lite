@@ -137,6 +137,38 @@
   <section class="table-panel">
     <div class="section-head">
       <div>
+        <h2>💳 Payment Attempts</h2>
+        <p class="meta">Review recent PayU transactions for this candidate, including verification state.</p>
+      </div>
+      <span class="badge">{{ payment_transactions|length }} attempts</span>
+    </div>
+    <div class="summary-list">
+      {% for payment in payment_transactions %}
+        <div class="summary-item admin-preview-item">
+          <div class="admin-preview-main">
+            <strong>{{ payment.provider|upper }} · {{ payment.status|title }}</strong>
+            <div class="meta mono">Txn {{ payment.provider_txn_id }}</div>
+            {% if payment.provider_payment_id %}
+              <div class="meta mono">Gateway ref {{ payment.provider_payment_id }}</div>
+            {% endif %}
+          </div>
+          <div class="admin-preview-meta">
+            <div class="meta">INR {{ payment.amount }}</div>
+            <div class="meta">{% if payment.verified %}Verified{% else %}Unverified{% endif %}</div>
+            <div class="meta">{{ (payment.completed_at or payment.updated_at)|datetime }}</div>
+          </div>
+        </div>
+      {% else %}
+        <div class="empty-state">
+          No payment attempts recorded yet for this student.
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="table-panel">
+    <div class="section-head">
+      <div>
         <h2>🧾 Recent Activity</h2>
         <p class="meta">Track registration and payment status changes for this candidate.</p>
       </div>

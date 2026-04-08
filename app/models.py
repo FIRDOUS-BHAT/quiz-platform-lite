@@ -29,6 +29,10 @@ class User(Base):
     sessions: Mapped[list["SessionToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     attempts: Mapped[list["Attempt"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     quizzes_created: Mapped[list["Quiz"]] = relationship(back_populates="creator")
+    payment_transactions: Mapped[list["PaymentTransaction"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint("role IN ('admin', 'student')", name="ck_users_role"),
@@ -154,3 +158,33 @@ class AuditLog(Base):
     request_id: Mapped[str | None] = mapped_column(String(128), index=True)
     raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+
+
+class PaymentTransaction(Base):
+    __tablename__ = "payment_transactions"
+
+    payment_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    provider_txn_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    provider_payment_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    amount: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="initiated", index=True)
+    verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    request_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    raw_request: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    raw_response: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    completed_at: Mapped[int | None] = mapped_column(BigInteger, index=True)
+
+    user: Mapped[User] = relationship(back_populates="payment_transactions")
+
+    __table_args__ = (
+        CheckConstraint("provider IN ('payu')", name="ck_payment_transactions_provider"),
+        CheckConstraint(
+            "status IN ('initiated', 'success', 'failure', 'tampered')",
+            name="ck_payment_transactions_status",
+        ),
+        CheckConstraint("amount ~ '^[0-9]+([.][0-9]{2})?$'", name="ck_payment_transactions_amount"),
+    )

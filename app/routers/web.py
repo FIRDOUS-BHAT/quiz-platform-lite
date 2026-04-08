@@ -33,8 +33,9 @@ from app.schemas.submission import (
     AttemptSubmissionRequest,
     ProcessingResultResponse,
 )
-from app.services.auth import new_session_token, verify_password
+from app.services.auth import new_session_token, normalize_and_validate_email, verify_password
 from app.services.excel import parse_quiz_workbook
+from app.services.payu import generate_payment_hash, verify_payment_response_hash
 from app.services.scoring import calculate_score
 from app.utils.csrf import get_csrf_token
 from app.utils.rate_limit import rate_limit_login, rate_limit_register
@@ -154,6 +155,39 @@ def _safe_admin_student_return_url(value: str | None) -> str:
     if normalized and normalized.startswith("/app/admin/students") and "://" not in normalized:
         return normalized
     return "/app/admin/students"
+
+
+def _register_url(
+    *,
+    payment_ready: bool = False,
+    registered_email: str | None = None,
+    payment_result: str | None = None,
+) -> str:
+    params: dict[str, str] = {}
+    if payment_ready:
+        params["payment_ready"] = "yes"
+    if registered_email:
+        params["registered_email"] = registered_email
+    if payment_result:
+        params["payment_result"] = payment_result
+    encoded = urlencode(params)
+    return f"/app/register?{encoded}" if encoded else "/app/register"
+
+
+def _public_base_url(request: Request) -> str:
+    configured = _normalized_text(settings.public_base_url)
+    if configured:
+        return configured.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+def _payu_is_configured() -> bool:
+    return bool(
+        settings.payu_payment_url
+        and settings.payu_merchant_key
+        and settings.payu_merchant_salt
+        and settings.payu_certificate_fee
+    )
 
 
 def _pending_registration_message(user: UserSession) -> str:
@@ -388,7 +422,10 @@ async def register_page(request: Request, store=Depends(get_store)) -> HTMLRespo
     current_user = await get_optional_current_user(request, store=store, scope="student")
     if current_user:
         return _redirect(_redirect_for_role(current_user))
-    payment_ready = request.query_params.get("payment_ready") == "yes"
+    payment_result = _normalized_text(request.query_params.get("payment_result"))
+    if payment_result not in {"success", "failure", "tampered"}:
+        payment_result = None
+    payment_ready = request.query_params.get("payment_ready") == "yes" or payment_result is not None
     registered_email = _normalized_text(request.query_params.get("registered_email"))
     return _render(
         request,
@@ -396,8 +433,9 @@ async def register_page(request: Request, store=Depends(get_store)) -> HTMLRespo
         current_user=None,
         allow_registration=settings.allow_open_registration,
         payment_fee=settings.payu_certificate_fee,
-        payment_url=settings.payu_payment_url,
+        payment_enabled=_payu_is_configured(),
         payment_ready=payment_ready,
+        payment_result=payment_result,
         registered_email=registered_email,
     )
 
@@ -427,16 +465,156 @@ async def register_submit(
         await store.create_paid_student_registration(payload, request_id=getattr(request.state, "request_id", None))
     except Exception as exc:
         if payload is not None and "Complete the payment to confirm your candidature." in str(exc):
-            payment_params = urlencode({"payment_ready": "yes", "registered_email": payload.email})
-            return _redirect(f"/app/register?{payment_params}", str(exc), "info")
+            return _redirect(_register_url(payment_ready=True, registered_email=payload.email), str(exc), "info")
         return _redirect("/app/register", str(exc), "error")
 
-    payment_params = urlencode({"payment_ready": "yes", "registered_email": payload.email})
     return _redirect(
-        f"/app/register?{payment_params}",
+        _register_url(payment_ready=True, registered_email=payload.email),
         "Registration received. Complete the payment next to confirm your candidature. "
         "After payment is verified, the exam date and login credentials will be shared by email.",
         "success",
+    )
+
+
+@router.post("/app/register/payment/start")
+async def register_payment_start(
+    request: Request,
+    registered_email: str = Form(...),
+    store=Depends(get_store),
+) -> HTMLResponse:
+    try:
+        normalized_email = normalize_and_validate_email(registered_email)
+    except ValueError as exc:
+        return _redirect("/app/register", str(exc), "error")
+
+    register_url = _register_url(payment_ready=True, registered_email=normalized_email)
+    if not _payu_is_configured():
+        return _redirect(
+            register_url,
+            "Payment gateway setup is incomplete. Contact the institute administrator.",
+            "error",
+        )
+
+    callback_url = f"{_public_base_url(request)}/app/payments/payu/callback"
+    try:
+        payment = await store.initiate_payu_payment(
+            email=normalized_email,
+            amount=settings.payu_certificate_fee or "",
+            product_info=settings.payu_product_info,
+            callback_url=callback_url,
+            request_id=getattr(request.state, "request_id", None),
+        )
+    except LookupError as exc:
+        return _redirect("/app/register", str(exc), "error")
+    except Exception as exc:
+        return _redirect(register_url, str(exc), "error")
+
+    payment_fields = {
+        "key": settings.payu_merchant_key or "",
+        "txnid": payment["provider_txn_id"],
+        "amount": payment["amount"],
+        "productinfo": payment["product_info"],
+        "firstname": payment["full_name"],
+        "email": payment["email"],
+        "phone": payment["mobile_number"] or "",
+        "surl": payment["callback_url"],
+        "furl": payment["callback_url"],
+        "udf1": payment["payment_id"],
+    }
+    payment_fields["hash"] = generate_payment_hash(
+        key=settings.payu_merchant_key or "",
+        salt=settings.payu_merchant_salt or "",
+        txnid=payment["provider_txn_id"],
+        amount=payment["amount"],
+        productinfo=payment["product_info"],
+        firstname=payment["full_name"],
+        email=payment["email"],
+        udf1=payment["payment_id"],
+    )
+    return _render(
+        request,
+        "payment_redirect.html",
+        current_user=None,
+        form_action=settings.payu_payment_url,
+        payment=payment,
+        payment_fields=payment_fields,
+    )
+
+
+@router.api_route("/app/payments/payu/callback", methods=["GET", "POST"])
+async def payu_payment_callback(request: Request, store=Depends(get_store)) -> RedirectResponse:
+    payload: dict[str, str] = {}
+    if request.method == "POST":
+        form = await request.form()
+        payload = {key: str(value) for key, value in form.items()}
+    if not payload:
+        payload = {key: value for key, value in request.query_params.items()}
+
+    fallback_email = _normalized_text(payload.get("email"))
+    if fallback_email is not None:
+        try:
+            fallback_email = normalize_and_validate_email(fallback_email)
+        except ValueError:
+            fallback_email = None
+
+    if not _normalized_text(payload.get("txnid")):
+        return _redirect(
+            _register_url(payment_ready=bool(fallback_email), registered_email=fallback_email),
+            "Payment response was missing the PayU transaction id.",
+            "error",
+        )
+
+    verified = False
+    if settings.payu_merchant_key and settings.payu_merchant_salt:
+        verified = verify_payment_response_hash(
+            payload,
+            key=settings.payu_merchant_key,
+            salt=settings.payu_merchant_salt,
+        )
+
+    try:
+        result = await store.finalize_payu_payment(
+            payload,
+            verified=verified,
+            request_id=getattr(request.state, "request_id", None),
+        )
+    except LookupError as exc:
+        return _redirect(
+            _register_url(payment_ready=bool(fallback_email), registered_email=fallback_email),
+            str(exc),
+            "error",
+        )
+    except Exception:
+        logger.exception("Failed to finalize PayU payment callback")
+        return _redirect(
+            _register_url(payment_ready=bool(fallback_email), registered_email=fallback_email),
+            "Payment verification failed unexpectedly. Contact the institute if the amount was deducted.",
+            "error",
+        )
+
+    target_url = _register_url(
+        payment_ready=True,
+        registered_email=result["registered_email"],
+        payment_result=result["status"],
+    )
+    if result["status"] == "success":
+        return _redirect(
+            target_url,
+            "Payment verified. Your candidature is confirmed. "
+            "The exam date and login credentials will be shared by email.",
+            "success",
+        )
+    if result["status"] == "failure":
+        return _redirect(
+            target_url,
+            "Payment was not completed. You can try again with the same registered email.",
+            "error",
+        )
+    return _redirect(
+        target_url,
+        "Payment response could not be verified. Your candidature is still unconfirmed. "
+        "Contact the institute if the amount was deducted.",
+        "error",
     )
 
 
@@ -725,6 +903,7 @@ async def admin_student_detail(
             student=None,
             student_attempts=None,
             audit_logs=[],
+            payment_transactions=[],
             quizzes=await store.list_quizzes_for_admin(),
             attempt_filters={
                 "query": attempt_q,
@@ -746,6 +925,7 @@ async def admin_student_detail(
         user_id=user_id,
     )
     audit_logs = await store.list_audit_logs_for_entity(entity_type="user", entity_id=user_id, limit=20)
+    payment_transactions = await store.list_payment_transactions_for_user(user_id, limit=10)
     return _render_admin(
         request,
         "admin_student_detail.html",
@@ -754,6 +934,7 @@ async def admin_student_detail(
         student=student,
         student_attempts=student_attempts,
         audit_logs=audit_logs,
+        payment_transactions=payment_transactions,
         quizzes=await store.list_quizzes_for_admin(),
         attempt_filters={
             "query": attempt_q,

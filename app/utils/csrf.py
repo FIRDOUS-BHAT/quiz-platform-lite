@@ -31,6 +31,7 @@ _EXEMPT_PATH_PREFIXES = (
     "/metrics",
     "/docs",
     "/openapi.json",
+    "/app/payments/payu/",
 )
 
 

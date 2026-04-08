@@ -68,6 +68,21 @@ class AdminAuditLogRecord(BaseModel):
     created_at: int = Field(gt=0)
 
 
+class AdminPaymentTransactionRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    payment_id: str
+    provider: str
+    provider_txn_id: str
+    provider_payment_id: str | None = None
+    amount: str
+    status: str
+    verified: bool
+    created_at: int = Field(gt=0)
+    updated_at: int = Field(gt=0)
+    completed_at: int | None = None
+
+
 class AdminParticipationRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

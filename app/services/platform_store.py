@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
 from app.config import settings
-from app.models import AuditLog, Attempt, Quiz, Result, SessionToken, User
+from app.models import AuditLog, Attempt, PaymentTransaction, Quiz, Result, SessionToken, User
 from app.schemas.auth import (
     PaymentStatus,
     PaidRegistrationRequest,
@@ -19,6 +19,7 @@ from app.schemas.auth import (
 )
 from app.schemas.platform import (
     AdminAuditLogRecord,
+    AdminPaymentTransactionRecord,
     AdminParticipationPage,
     AdminParticipationRecord,
     AdminQuizPage,
@@ -36,6 +37,7 @@ from app.schemas.submission import QuizResultResponse
 from app.services.auth import hash_password, hash_session_token, normalize_email
 from app.services.db import DatabaseSessionFactory
 from app.services.excel import slugify
+from app.services.payu import normalize_amount
 from app.utils.time import epoch_to_local_iso, local_timezone_name, utc_now_epoch
 
 
@@ -176,6 +178,238 @@ class PlatformStore:
                 access_status=UserAccessStatus(user.access_status),
             )
 
+    async def initiate_payu_payment(
+        self,
+        *,
+        email: str,
+        amount: str,
+        product_info: str,
+        callback_url: str,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_email = normalize_email(email)
+        normalized_amount = normalize_amount(amount)
+        created_at = utc_now_epoch()
+
+        async with self.session_factory.begin() as session:
+            user = (
+                await session.execute(
+                    select(User)
+                    .where(User.email == normalized_email)
+                    .with_for_update(skip_locked=False)
+                )
+            ).scalar_one_or_none()
+            if user is None:
+                raise LookupError("Submit the registration form before starting payment.")
+            if user.role != UserRole.STUDENT.value:
+                raise ValueError("This account is not eligible for candidate payment.")
+            if user.access_status != UserAccessStatus.PENDING_CREDENTIALS.value:
+                raise ValueError("This account already has login access. Use the sign in page instead.")
+            if user.payment_status == PaymentStatus.CONFIRMED.value:
+                raise ValueError(
+                    "This registration is already payment-confirmed. "
+                    "The exam date and login credentials will be shared by email."
+                )
+
+            payment_id = uuid.uuid4().hex
+            provider_txn_id = f"payu_{payment_id}"
+            raw_request = {
+                "txnid": provider_txn_id,
+                "amount": normalized_amount,
+                "productinfo": product_info,
+                "firstname": user.full_name,
+                "email": user.email,
+                "phone": user.mobile_number,
+                "surl": callback_url,
+                "furl": callback_url,
+                "udf1": payment_id,
+            }
+            payment = PaymentTransaction(
+                payment_id=payment_id,
+                user_id=user.user_id,
+                provider="payu",
+                provider_txn_id=provider_txn_id,
+                amount=normalized_amount,
+                status="initiated",
+                verified=False,
+                request_id=request_id,
+                raw_request=raw_request,
+                created_at=created_at,
+                updated_at=created_at,
+            )
+            session.add(payment)
+            self._add_audit_log(
+                session,
+                entity_type="payment",
+                entity_id=payment.payment_id,
+                user_id=user.user_id,
+                event_type="payment_initiated",
+                summary="PayU payment initiated",
+                request_id=request_id,
+                raw_data={
+                    "provider": payment.provider,
+                    "provider_txn_id": payment.provider_txn_id,
+                    "amount": payment.amount,
+                },
+            )
+            self._add_audit_log(
+                session,
+                entity_type="user",
+                entity_id=user.user_id,
+                user_id=user.user_id,
+                event_type="payment_initiated",
+                summary="Candidate started the PayU payment flow",
+                request_id=request_id,
+                raw_data={
+                    "payment_id": payment.payment_id,
+                    "provider_txn_id": payment.provider_txn_id,
+                    "amount": payment.amount,
+                },
+            )
+            return {
+                "payment_id": payment.payment_id,
+                "provider_txn_id": payment.provider_txn_id,
+                "amount": payment.amount,
+                "product_info": product_info,
+                "full_name": user.full_name,
+                "email": user.email,
+                "mobile_number": user.mobile_number,
+                "callback_url": callback_url,
+            }
+
+    async def finalize_payu_payment(
+        self,
+        payload: dict[str, str],
+        *,
+        verified: bool,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        provider_txn_id = str(payload.get("txnid", "")).strip()
+        if not provider_txn_id:
+            raise ValueError("Missing PayU transaction id")
+
+        provider_status = str(payload.get("status", "")).strip().lower() or "failure"
+        provider_payment_id = str(payload.get("mihpayid", "")).strip() or None
+        completed_at = utc_now_epoch()
+
+        async with self.session_factory.begin() as session:
+            payment = (
+                await session.execute(
+                    select(PaymentTransaction)
+                    .where(
+                        PaymentTransaction.provider == "payu",
+                        PaymentTransaction.provider_txn_id == provider_txn_id,
+                    )
+                    .with_for_update(skip_locked=False)
+                )
+            ).scalar_one_or_none()
+            if payment is None:
+                raise LookupError("Payment transaction not found")
+
+            user = (
+                await session.execute(
+                    select(User)
+                    .where(User.user_id == payment.user_id)
+                    .with_for_update(skip_locked=False)
+                )
+            ).scalar_one_or_none()
+            if user is None:
+                raise LookupError("Candidate registration not found")
+
+            previous_transaction_status = payment.status
+            previous_verified = payment.verified
+            previous_provider_payment_id = payment.provider_payment_id
+            previous_user_payment_status = user.payment_status
+
+            if not verified:
+                next_status = "tampered"
+                payment_summary = "PayU callback failed hash verification"
+                user_summary = "Payment response could not be verified"
+            elif provider_status == "success":
+                next_status = "success"
+                payment_summary = "PayU payment verified successfully"
+                user_summary = "Candidate payment verified successfully"
+            else:
+                next_status = "failure"
+                payment_summary = f"PayU payment reported status '{provider_status}'"
+                user_summary = f"Candidate payment attempt reported status '{provider_status}'"
+
+            payment.status = next_status
+            payment.verified = verified
+            payment.provider_payment_id = provider_payment_id or payment.provider_payment_id
+            payment.raw_response = dict(payload)
+            payment.request_id = request_id or payment.request_id
+            payment.updated_at = completed_at
+            payment.completed_at = completed_at
+
+            if verified and provider_status == "success":
+                user.payment_status = PaymentStatus.CONFIRMED.value
+            elif user.payment_status != PaymentStatus.CONFIRMED.value:
+                user.payment_status = PaymentStatus.UNCONFIRMED.value
+
+            if (
+                previous_transaction_status != payment.status
+                or previous_verified != payment.verified
+                or previous_provider_payment_id != payment.provider_payment_id
+            ):
+                self._add_audit_log(
+                    session,
+                    entity_type="payment",
+                    entity_id=payment.payment_id,
+                    user_id=user.user_id,
+                    event_type=f"payment_{payment.status}",
+                    summary=payment_summary,
+                    request_id=request_id,
+                    raw_data={
+                        "provider_txn_id": payment.provider_txn_id,
+                        "provider_payment_id": payment.provider_payment_id,
+                        "provider_status": provider_status,
+                        "verified": payment.verified,
+                    },
+                )
+                self._add_audit_log(
+                    session,
+                    entity_type="user",
+                    entity_id=user.user_id,
+                    user_id=user.user_id,
+                    event_type=f"payment_{payment.status}",
+                    summary=user_summary,
+                    request_id=request_id,
+                    raw_data={
+                        "payment_id": payment.payment_id,
+                        "provider_txn_id": payment.provider_txn_id,
+                        "provider_payment_id": payment.provider_payment_id,
+                        "provider_status": provider_status,
+                        "verified": payment.verified,
+                    },
+                )
+
+            if previous_user_payment_status != user.payment_status:
+                self._add_audit_log(
+                    session,
+                    entity_type="user",
+                    entity_id=user.user_id,
+                    user_id=user.user_id,
+                    event_type="payment_status_changed",
+                    summary=f"Payment status changed from {previous_user_payment_status} to {user.payment_status}",
+                    request_id=request_id,
+                    raw_data={
+                        "previous_status": previous_user_payment_status,
+                        "current_status": user.payment_status,
+                        "payment_id": payment.payment_id,
+                        "provider_txn_id": payment.provider_txn_id,
+                    },
+                )
+
+            return {
+                "payment_id": payment.payment_id,
+                "provider_txn_id": payment.provider_txn_id,
+                "registered_email": user.email,
+                "status": payment.status,
+                "verified": payment.verified,
+                "user_payment_status": user.payment_status,
+            }
+
     async def authenticate_user(self, email: str) -> dict[str, Any] | None:
         normalized_email = normalize_email(email)
         async with self.session_factory() as session:
@@ -301,6 +535,34 @@ class PlatformStore:
                 )
             ).all()
             return [AdminAuditLogRecord.model_validate(dict(row._mapping)) for row in rows]
+
+    async def list_payment_transactions_for_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = 10,
+    ) -> list[AdminPaymentTransactionRecord]:
+        async with self.session_factory() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        PaymentTransaction.payment_id,
+                        PaymentTransaction.provider,
+                        PaymentTransaction.provider_txn_id,
+                        PaymentTransaction.provider_payment_id,
+                        PaymentTransaction.amount,
+                        PaymentTransaction.status,
+                        PaymentTransaction.verified,
+                        PaymentTransaction.created_at,
+                        PaymentTransaction.updated_at,
+                        PaymentTransaction.completed_at,
+                    )
+                    .where(PaymentTransaction.user_id == user_id)
+                    .order_by(PaymentTransaction.created_at.desc())
+                    .limit(limit)
+                )
+            ).all()
+            return [AdminPaymentTransactionRecord.model_validate(dict(row._mapping)) for row in rows]
 
     async def create_quiz(
         self,
