@@ -357,6 +357,11 @@ async def app_home(request: Request, store=Depends(get_store)) -> RedirectRespon
     return _redirect(_redirect_for_role(user))
 
 
+@router.get("/", response_class=HTMLResponse)
+async def root_home() -> RedirectResponse:
+    return _redirect("/app/register")
+
+
 @router.get("/app/login", response_class=HTMLResponse)
 async def login_page(request: Request, store=Depends(get_store)) -> HTMLResponse:
     current_user = await get_optional_current_user(request, store=store, scope="student")

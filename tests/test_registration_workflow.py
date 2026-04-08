@@ -133,6 +133,18 @@ def test_register_page_hides_payment_until_submission(monkeypatch):
     assert "Submit Registration" in response.text
 
 
+def test_root_redirects_to_registration_page(monkeypatch):
+    _COUNTS.clear()
+    monkeypatch.setattr(settings, "allow_open_registration", True)
+
+    client = TestClient(build_app(FakeRegisterStore()))
+
+    response = client.get("/", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/app/register"
+
+
 def test_successful_registration_unlocks_payment_step(monkeypatch):
     _COUNTS.clear()
     monkeypatch.setattr(settings, "allow_open_registration", True)
